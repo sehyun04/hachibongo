@@ -1,0 +1,121 @@
+/* 색은 치이스페 그림과 맞춘다. 발과 책상 소품이 그림과 따로 놀지 않게.
+   --skin·--line·팔 굵기는 main.js 가 chars.js(그림에서 잰 값)로 캐릭터마다 덮어쓴다. */
+:root {
+  --ink: #000000;
+  --line: #000000;
+  --eye-ink: #000000;
+  --cap: #86b5cf;
+  --skin: #fcfcfc;
+  --white: #ffffff;
+  --desk: #fbf4ea;
+  --desk-front: #e4d0b6;
+  --key: #f1ebe2;
+  --key-side: #c9baa6;
+  --lit: #86b5cf;
+  --lit-side: #5c8daf;
+  --pad: #e2eef4;
+  --pad-front: #a3bfcf;
+  --z: var(--cap);
+  --arm-w: 17.4;
+  --arm-o: 27;
+}
+
+/* 눌린 키·패드·z 는 캐릭터 색으로 칠한다. 하치와레는 귀 파랑, 치이카와는 볼 분홍,
+   우사기는 치이스페 우사기 색. 치이스페 치이카와 색(연보라)은 쓰지 않는다. */
+:root[data-char="chiikawa"] {
+  --lit: #f5a3b5;
+  --lit-side: #d77e93;
+  --pad: #fce8ed;
+  --pad-front: #e9b2bf;
+  --z: #fcaebf;
+}
+:root[data-char="usagi"] {
+  --lit: #f2ce5b;
+  --lit-side: #c9a43a;
+  --pad: #fbf2d3;
+  --pad-front: #e3cb85;
+  --z: #f2ce5b;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#stage { display: block; width: 100%; height: 100%; }
+#cat { pointer-events: none; }
+.hitzone { fill: transparent; }
+
+.ink { fill: var(--line); }
+.skin { fill: var(--skin); }
+/* 감은 눈·다문 입은 윤곽선이 아니라 눈썹·눈과 같은 색이다. 치이카와는 윤곽만 갈색이고 얼굴 선은 검다. */
+.line {
+  fill: none;
+  stroke: var(--eye-ink);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.desk-top { fill: var(--desk); }
+.desk-front { fill: var(--desk-front); }
+.desk-line { fill: none; stroke: var(--ink); stroke-width: 3.6; stroke-linejoin: round; }
+
+.shadow { fill: var(--ink); opacity: 0.22; }
+.paw-shadow { fill: var(--ink); }
+.kb-base { fill: var(--white); stroke: var(--ink); stroke-width: 3.2; stroke-linejoin: round; }
+.kb-front { fill: #d3c3ad; stroke: var(--ink); stroke-width: 3.2; stroke-linejoin: round; }
+/* 키캡: 아래에 진한 옆면을 깔고 윗면을 그 위에 얹는다. 누르면 윗면이 내려가 옆면이 거의 사라진다. */
+.key-side { fill: var(--key-side); transition: fill 0.12s; }
+.key-top { fill: var(--key); transition: fill 0.12s, transform 0.08s; }
+.key.lit .key-side { fill: var(--lit-side); transition: none; }
+.key.lit .key-top { fill: var(--lit); transform: translateY(1.2px); transition: none; }
+
+.pad { fill: var(--pad); stroke: var(--ink); stroke-width: 3.2; stroke-linejoin: round; }
+.pad-front { fill: var(--pad-front); stroke: var(--ink); stroke-width: 3.2; stroke-linejoin: round; }
+.mouse-body { fill: var(--white); }
+.btn { fill: transparent; transition: fill 0.12s; }
+.btn.lit { fill: var(--lit); transition: none; }
+.mouse-line { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; }
+.wheel { fill: var(--white); stroke: var(--ink); stroke-width: 1.6; transition: fill 0.12s; }
+.wheel.lit { fill: var(--lit); transition: none; }
+.mouse-outline { fill: none; stroke: var(--ink); stroke-width: 3.2; }
+
+/* 그림 속 팔과 같은 굵기의 뭉툭한 발. 길이는 거의 그대로 두고 각도로 움직인다. */
+.arm-o { fill: none; stroke: var(--line); stroke-width: var(--arm-o); stroke-linecap: round; }
+.arm-w { fill: none; stroke: var(--skin); stroke-width: var(--arm-w); stroke-linecap: round; }
+.paw { fill: var(--skin); }
+
+/* 꼬리는 귀와 같은 파랑. 굵기는 팔과 비슷하게, 외곽선은 팔과 같게(한쪽 4.8) */
+.tail-o, .tail-b { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.tail-o { stroke: var(--ink); stroke-width: 27; }
+.tail-b { stroke: var(--cap); stroke-width: 17.4; }
+
+/* 누를 때 튀는 짧은 효과선. 만화 쪽 표현이라 링보다 원작 결에 가깝다. */
+#fx, #zzz, #eyesClosed, #mouthClosed { pointer-events: none; }
+.tap { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; animation: tap 0.26s ease-out forwards; }
+@keyframes tap { from { opacity: 1; } to { opacity: 0; } }
+
+#eyesClosed, #mouthClosed, #zzz { display: none; }
+.blink #eyesClosed, .sleep #eyesClosed { display: inline; }
+.sleep #mouthClosed, .sleep #zzz { display: inline; }
+
+#zzz text {
+  font: 700 15px "Segoe UI", "Malgun Gothic", sans-serif;
+  fill: var(--z);
+  stroke: var(--ink);
+  stroke-width: 0.8;
+  paint-order: stroke;
+  animation: zfloat 3s ease-in-out infinite;
+}
+#zzz .z2 { font-size: 18px; animation-delay: 0.5s; }
+#zzz .z3 { font-size: 22px; animation-delay: 1s; }
+@keyframes zfloat {
+  0%, 100% { opacity: 0.35; transform: translateY(2px); }
+  50% { opacity: 1; transform: translateY(-3px); }
+}
+

@@ -1,0 +1,6 @@
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+
+# 데모 영상은 그때그때 다시 찍는 결과물이라 소스와 같이 두지 않는다
+*.mp4

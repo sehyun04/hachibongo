@@ -1,0 +1,30 @@
+[package]
+name = "hachibongo"
+version = "0.1.0"
+edition = "2021"
+description = "키보드·마우스 입력을 따라 치는 하치와레 오버레이"
+
+[features]
+# Tauri 는 릴리스 여부를 --release 가 아니라 이 feature 로 가른다. 꺼져 있으면
+# 프론트를 exe 에 박지 않고 devUrl 을 찾는다.
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_LibraryLoader",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_HiDpi",
+] }
+
+[profile.release]
+strip = true

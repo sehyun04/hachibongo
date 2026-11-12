@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>하치봉고</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<svg id="stage" viewBox="72 0 320 274" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="deskArea"><rect x="72" y="185.5" width="320" height="90"/></clipPath>
+    <!-- 하치가 책상과 만나는 자리의 옅은 그늘. 가운데가 진하고 가장자리로 갈수록 사라진다. -->
+    <radialGradient id="contactShade" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#000" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="mouseClip"><rect x="-11" y="-15" width="22" height="30" rx="10.5"/></clipPath>
+  </defs>
+
+  <!-- 꼬리는 몸 뒤에서 나오므로 팔 외곽선·몸 그림보다 먼저 그린다. 그래야 오른팔이 꼬리 앞에 온다. 뿌리는 책상이 가린다.
+       몸과 같이 기울도록 main.js 가 #body 와 같은 변환을 건다. 꼬리가 긴 하치와레만 보인다. -->
+  <g id="tail">
+    <path id="tailO" class="tail-o"/>
+    <path id="tailB" class="tail-b"/>
+  </g>
+
+  <!-- 팔 외곽선. 몸 안쪽 부분은 위에 얹는 그림이 가려서 팔이 옆구리에서 나온 것처럼 이어진다.
+       책상 위로 내려온 부분은 책상이 덮으므로 아래에서 같은 것을 책상 영역만 다시 그린다. -->
+  <g id="armsUnder">
+    <path id="armLo" class="arm-o"/>
+    <path id="armRo" class="arm-o"/>
+  </g>
+
+  <!-- 몸은 목이 따로 없는 한 덩어리라, 책상 모서리 바로 아래(200, 196)를 축으로 통째로 기울인다. -->
+  <g id="body">
+    <!-- 치이스페 얼굴 그림(kasaspace/ui/assets/faces/<캐릭터>.png)을 760px 로 줄인 것. 손대지 않고 쓴다.
+         자리·크기와 아래 덮개 자리는 chars.js(scripts/measure-chars.py 가 그림에서 잰 것)에서 채운다. -->
+    <image id="cat"/>
+    <!-- 그림은 사각형 전체가 클릭을 받으므로 실루엣만 따로 둔다 -->
+    <path id="hit" class="hitzone"/>
+
+    <!-- 깜빡임·졸기: 그림의 눈과 입을 얼굴색으로 덮고 감은 모양을 그린다 -->
+    <g id="eyesClosed">
+      <ellipse id="eyeCoverL" class="skin"/>
+      <ellipse id="eyeCoverR" class="skin"/>
+      <path id="eyeLines" class="line"/>
+    </g>
+    <g id="mouthClosed">
+      <rect id="mouthCover" class="skin" rx="6"/>
+      <path id="mouthLine" class="line"/>
+    </g>
+  </g>
+
+  <!-- 책상 윗면은 뒤가 좁은 사다리꼴(main.js 의 FLOOR). 키보드·패드도 같은 바닥 위에 있다. -->
+  <g id="desk">
+    <path id="deskFront" class="desk-front"/>
+    <path id="deskTop" class="desk-top"/>
+    <path id="deskLine" class="desk-line"/>
+  </g>
+  <ellipse fill="url(#contactShade)" cx="202" cy="185.5" rx="98" ry="14" clip-path="url(#deskArea)"/>
+
+  <!-- 키보드는 하나. 하치 몸 가운데(x 200)를 기준으로 왼쪽 키는 왼발, 오른쪽 키는 오른발이 친다. -->
+  <path id="kbShadow" class="shadow"/>
+  <path id="kbFront" class="kb-front"/>
+  <path id="kb" class="kb-base"/>
+  <g id="keys"></g>
+
+  <path id="padShadow" class="shadow"/>
+  <path id="padFront" class="pad-front"/>
+  <path id="pad" class="pad"/>
+  <g id="mouse" transform="translate(315 217)">
+    <ellipse class="shadow" cx="3.5" cy="6" rx="12.5" ry="14"/>
+    <rect class="mouse-body" x="-11" y="-15" width="22" height="30" rx="10.5"/>
+    <g clip-path="url(#mouseClip)">
+      <rect id="btn0" class="btn" x="-11" y="1.6" width="11" height="14"/>
+      <rect id="btn1" class="btn" x="0" y="1.6" width="11" height="14"/>
+    </g>
+    <path class="mouse-line" d="M -10.7 1.4 Q 0 4.2 10.7 1.4 M 0 2.8 V 15"/>
+    <rect id="wheel" class="wheel" x="-2" y="3.8" width="4" height="6" rx="2"/>
+    <rect class="mouse-outline" x="-11" y="-15" width="22" height="30" rx="10.5"/>
+  </g>
+
+  <!-- 발 그림자. 발이 들리면 커지고 옅어진다(main.js). -->
+  <ellipse id="shadowL" class="paw-shadow"/>
+  <ellipse id="shadowR" class="paw-shadow"/>
+
+  <use href="#armsUnder" clip-path="url(#deskArea)"/>
+  <!-- 발 외곽선은 팔 흰 줄기보다 먼저 그려야 손목에 고리 선이 생기지 않는다.
+       발은 몸 앞으로 올라와도 늘 외곽선이 보여야 해서 가리지 않는다. -->
+  <g id="armsTop">
+    <ellipse id="pawLo" class="ink"/>
+    <ellipse id="pawRo" class="ink"/>
+    <path id="armLw" class="arm-w"/>
+    <path id="armRw" class="arm-w"/>
+    <ellipse id="pawLw" class="paw"/>
+    <ellipse id="pawRw" class="paw"/>
+  </g>
+
+  <g id="fx"></g>
+  <g id="zzz">
+    <text x="282" y="60" class="z1">z</text>
+    <text x="294" y="42" class="z2">z</text>
+    <text x="304" y="22" class="z3">Z</text>
+  </g>
+</svg>
+<script src="chars.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
