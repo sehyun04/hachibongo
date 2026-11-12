@@ -29,9 +29,12 @@
 - 트레이 아이콘 메뉴: 캐릭터(하치와레·치이카와·우사기), 크기(작게·보통·크게), 클릭 통과(고정), 위치 초기화, 종료.
   캐릭터·위치·크기는 `%APPDATA%\com.sehyun.hachibongo\settings.json` 에 남는다.
 
-> 하치와레는 나가노(ちいかわ)의 캐릭터다. 개인 PC 에서 쓰는 팬 제작물로만 두고 배포·판매하지 않는다.
+> 하치와레·치이카와·우사기는 나가노(ちいかわ)의 캐릭터이고 그림의 권리는 원작자에게 있다.
+> 이 저장소는 비상업 팬 제작물이다. 판매하거나 수익을 내지 않으며, 권리자가 요청하면 내린다.
 
 ## 빌드·실행
+
+Windows 전용이다(전역 키보드·마우스 훅을 Win32 API 로 건다). Node.js 와 Rust 가 있어야 한다.
 
 ```
 npm install
@@ -42,7 +45,7 @@ npm run dev            # 디버그 실행
 그림만 볼 때는 `src/index.html` 을 아무 정적 서버로 열면 된다. Tauri 밖에서는 혼자 움직이는
 데모가 돌고, `?still` 을 붙이면 멈춘 기본 자세로 뜬다. `?char=chiikawa`·`?char=usagi` 로 캐릭터를 고른다.
 
-치이스페 얼굴 그림이 바뀌면 `python -I scripts/measure-chars.py` 로 다시 잰다. 창 높이가 바뀌었다고 나오면
+치이스페 얼굴 그림이 바뀌면 `python -I scripts/measure-chars.py` 로 다시 잰다(원본 그림이 있는 `../kasaspace` 가 옆에 있어야 한다). 창 높이가 바뀌었다고 나오면
 `src-tauri/src/main.rs` 의 `CHARS` 높이도 같이 고친다.
 
 ## 구조
