@@ -96,13 +96,15 @@ html, body {
 .tail-b { stroke: var(--cap); stroke-width: 17.4; }
 
 /* 누를 때 튀는 짧은 효과선. 만화 쪽 표현이라 링보다 원작 결에 가깝다. */
-#fx, #zzz, #eyesClosed, #mouthClosed { pointer-events: none; }
+#fx, #zzz, #eyesClosed, #mouthClosed, #burst { pointer-events: none; }
 .tap { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; animation: tap 0.26s ease-out forwards; }
 @keyframes tap { from { opacity: 1; } to { opacity: 0; } }
 
-#eyesClosed, #mouthClosed, #zzz { display: none; }
+#eyesClosed, #mouthClosed, #zzz, #burst { display: none; }
 .blink #eyesClosed, .sleep #eyesClosed { display: inline; }
 .sleep #mouthClosed, .sleep #zzz { display: inline; }
+.burst #burst { display: inline; }
+.sleep #burst { display: none; }
 
 #zzz text {
   font: 700 15px "Segoe UI", "Malgun Gothic", sans-serif;

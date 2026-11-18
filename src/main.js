@@ -145,6 +145,8 @@ const MOUSE_GRIP = 12;
 const MIN_HOLD = 70;      // 아주 짧은 타건도 한 번은 눌린 모습이 보이게
 const HOVER_MS = 650;     // 손을 뗀 뒤 그 키 위에 머무는 시간
 const SLEEP_MS = 60_000;
+const BURST_ON = 3000;    // 이만큼 이어 쳐야 얼굴이 바뀐다. 몇 자 칠 때마다 바뀌면 정신없다
+const BURST_GAP = 1500;   // 키 사이가 이보다 비면 끊긴 것으로 본다. 단어 사이에 쉬는 정도로는 안 끊긴다
 
 const held = [];          // 지금 눌린 키, 마지막에 누른 것이 끝
 const lastUp = { L: { key: null, at: -1e9 }, R: { key: null, at: -1e9 } };
@@ -217,9 +219,14 @@ function keyDown(vk) {
   key.held++;
   key.el.classList.add('lit');
   tapLines(hitX(key.side, key), key.cy - 3, 14);
+  const t = now();
+  if (t - lastKeyAt > BURST_GAP || lastMouseAct > lastKeyAt) streakFrom = t;
   lastKey = key;
-  lastKeyAt = now();
+  lastKeyAt = t;
   body.nod = 1.6;
+  burst(t - streakFrom >= BURST_ON);
+  clearTimeout(burstTimer);
+  burstTimer = setTimeout(() => burst(false), BURST_GAP);
 }
 
 function flick(speed) {
@@ -249,6 +256,7 @@ function button(b, down) {
   if (b > 2) return;
   buttons[b] = down;
   lastMouseAct = now();
+  burst(false);
   const el = b === 2 ? $('wheel') : $('btn' + b);
   el.classList.toggle('lit', down);
   if (down) {
@@ -261,6 +269,7 @@ function button(b, down) {
 let wheelTimer = 0;
 function wheel() {
   lastMouseAct = now();
+  burst(false);
   $('wheel').classList.add('lit');
   clearTimeout(wheelTimer);
   wheelTimer = setTimeout(() => { if (!buttons[2]) $('wheel').classList.remove('lit'); }, 140);
@@ -291,7 +300,10 @@ function handle(e) {
       [mouseTarget.x, mouseTarget.y] = project(
         MOUSE_RANGE.x0 + clamp01(e.nx) * (MOUSE_RANGE.x1 - MOUSE_RANGE.x0),
         MOUSE_RANGE.y0 + clamp01(e.ny) * (MOUSE_RANGE.y1 - MOUSE_RANGE.y0));
-      if (Math.abs(e.nx - cursorNx) > 1e-4) lastMoveAt = lastMouseAct = now();
+      if (Math.abs(e.nx - cursorNx) > 1e-4) {
+        lastMoveAt = lastMouseAct = now();
+        burst(false);
+      }
       cursorNx = e.nx;
       hitTest(e.lx, e.ly);
       active();
@@ -319,6 +331,59 @@ function setIgnore(v) {
 }
 
 // ---------------------------------------------------------------- 표정
+
+// 한참 이어 칠 때 얼굴. 캐릭터마다 사용자가 고른 원작 장면을 따라 그려 그림 위에 얹는다(그림은 그대로).
+// 원작 장면은 이 그림보다 선이 가늘고 얼굴이 커서, 자리는 눈 사이 거리로 맞추고 선 굵기는 이 그림에 맞췄다.
+const n2 = (v) => +v.toFixed(2);
+const BURST = {
+  // 미간의 효과선 넷과 그 아래 떨림 표시. 눈은 원작 장면처럼 흰 빛을 키워 다시 그렸더니 다른 아이처럼 보여서 그림 그대로 두고,
+  // 입도 원작 장면과 같은 모양이라 둔다.
+  hachiware(c) {
+    const [[lx, ly], [rx, ry]] = c.eyes;
+    const mx = (lx + rx) / 2, my = (ly + ry) / 2;
+    // 왼쪽 둘을 그리고 미간을 축으로 뒤집는다. 선은 위쪽 가운데를 향해 살짝 휜다.
+    const spark = (x0, y0, x1, y1, side) => {
+      const X = (x) => n2(mx + side * x);
+      const qx = (x0 + x1) / 2 + (y1 - y0) * 0.12, qy = (y0 + y1) / 2 - (x1 - x0) * 0.12;
+      return `M ${X(x0)} ${n2(my + y0)} Q ${X(qx)} ${n2(my + qy)} ${X(x1)} ${n2(my + y1)}`;
+    };
+    const sparks = [1, -1].map((s) => spark(-14.2, -9, -10.6, -3.6, s) + ' ' + spark(-5.6, -9.4, -3.6, -3.4, s)).join(' ');
+    const arch = (y) => `M ${n2(mx - 3.6)} ${n2(my + y + 0.6)} Q ${n2(mx)} ${n2(my + y - 1.4)} ${n2(mx + 3.6)} ${n2(my + y + 0.9)}`;
+    return `<path class="line" style="stroke-width:1.9" d="${sparks}"/>` +
+      `<path class="line" style="stroke-width:1.7" d="${arch(1.9)} ${arch(5.7)}"/>`;
+  },
+  // 공부하며 집중할 때 얼굴: 안쪽으로 내려간 눈썹과 다문 입 아래 작은 점. 눈과 입은 그림 그대로다.
+  // 원래 둥근 눈썹은 눈에서 멀리 떠 있어서 덮고, 원작 장면처럼 눈 바로 위에 새로 긋는다.
+  chiikawa(c) {
+    const [[lx, ly], [rx, ry]] = c.eyes;
+    const mx = (lx + rx) / 2, my = (ly + ry) / 2;
+    const cover = (x, y) => `<ellipse class="skin" cx="${n2(x - 0.3)}" cy="${n2(y - 34)}" rx="8.6" ry="5.2"/>`;
+    const brow = (s) => `M ${n2(mx + s * 35.1)} ${n2(my - 27.4)} L ${n2(mx + s * 23.9)} ${n2(my - 19)}`;
+    return cover(lx, ly) + cover(rx, ry) +
+      `<path class="line" style="stroke-width:3.6" d="${brow(-1)} ${brow(1)} ` +
+      `M ${n2(mx - 0.4)} ${n2(my + 35.6)} L ${n2(mx - 0.4)} ${n2(my + 36.6)}"/>`;
+  },
+  // 신나서 꼼지락거릴 때의 입. 가운데가 솟고 오른쪽 아래로 꼬리가 내려온다. 벌린 입을 덮고 그 위에 그린다.
+  // 벌린 입 아래 턱선은 입을 다물면 입이 둘인 것처럼 보여서 같이 덮는다(원작 장면에도 없다).
+  usagi(c) {
+    const [x, y, w, h] = c.mouth.rect;
+    const k = 0.44;  // 원작 그림의 입 폭 60px 를 26 으로. 원작 장면처럼 눈에 비해 입이 조금 크다
+    const sw = 3.8;
+    return `<rect class="skin" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/>` +
+      `<ellipse class="skin" cx="${n2(x + w / 2 - 0.3)}" cy="${n2(y + 35.2)}" rx="7.8" ry="4.6"/>` +
+      `<path class="line" style="stroke-width:${n2(sw / k)}" ` +
+      `transform="translate(${n2(x + w / 2)} ${n2(y + sw / 2)}) scale(${k}) translate(-394.5 -412.5)" ` +
+      `d="M 364.5 422.5 Q 373.5 433.5 383.5 434.5 Q 392.5 434.5 396.5 426.5 L 396.5 412.5 ` +
+      `M 396.5 426.5 Q 401.5 429.5 409.5 429.5 Q 418.5 428.5 424.5 418.5 ` +
+      `M 408.5 429.5 Q 409.5 441.5 406.5 445.5 Q 404.5 448.5 399.5 448.5"/>`;
+  },
+};
+
+let streakFrom = -1e9;
+let burstTimer = 0;
+function burst(on) {
+  svg.classList.toggle('burst', on);
+}
 
 let sleepTimer = 0;
 function active() {
@@ -564,6 +629,7 @@ function setChar(key) {
   const m = C.mouth;
   setAttrs($('mouthCover'), m ? { x: m.rect[0], y: m.rect[1], width: m.rect[2], height: m.rect[3] } : { width: 0, height: 0 });
   $('mouthLine').setAttribute('d', m ? m.path : '');
+  $('burst').innerHTML = BURST[key] ? BURST[key](C) : '';
   $('tail').style.display = C.tail ? '' : 'none';
   $('zzz').setAttribute('transform', `translate(${C.z} 0)`);
   kick();
@@ -608,27 +674,27 @@ if (T) {
 
 // 브라우저에서 열면 혼자 움직인다. 앱 밖에서 모양을 확인할 때 쓴다.
 // 치기와 마우스를 번갈아 한다. 마우스를 만지면 꼬리 살랑임이 잦아들어서, 둘을 같이 돌리면 살랑임이 안 보인다.
-// 10초 한 바퀴: 0~4.5 치기, 4.5~8.5 마우스, 나머지는 쉬기.
+// 12초 한 바퀴: 0~6 치기(3초부터 이어 칠 때 얼굴), 6~10 마우스, 나머지는 쉬기.
 function demo() {
   const t0 = now();
-  const at = () => ((now() - t0) / 1000) % 10;
+  const at = () => ((now() - t0) / 1000) % 12;
   setInterval(() => {
     const p = at();
-    if (p < 4.5 || p > 8.5) return;
+    if (p < 6 || p > 10) return;
     const s = (now() - t0) / 1000;
     handle({ t: 'm', nx: 0.5 + 0.45 * Math.sin(s * 1.3), ny: 0.5 + 0.45 * Math.sin(s * 2.1 + 1), lx: -1, ly: -1 });
   }, 16);
   const vks = [...'HACHIWARE'].map((c) => c.charCodeAt(0)).concat([0x20, 0x0d, 0x08, 0x26]);
   let i = 0;
   setInterval(() => {
-    if (at() >= 4.5) return;
+    if (at() >= 6) return;
     const vk = vks[i++ % vks.length];
     handle({ t: 'k', vk, d: true });
     setTimeout(() => handle({ t: 'k', vk, d: false }), 90);
   }, 200);
   setInterval(() => {
     const p = at();
-    if (p < 5 || p > 8.3) return;
+    if (p < 6.5 || p > 9.8) return;
     handle({ t: 'b', b: 0, d: true });
     setTimeout(() => handle({ t: 'b', b: 0, d: false }), 120);
   }, 900);

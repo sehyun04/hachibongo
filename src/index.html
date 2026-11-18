@@ -39,6 +39,10 @@
     <!-- 그림은 사각형 전체가 클릭을 받으므로 실루엣만 따로 둔다 -->
     <path id="hit" class="hitzone"/>
 
+    <!-- 한참 이어 칠 때 얼굴. 캐릭터마다 원작 장면을 따라 그린 것을 main.js(BURST)가 채운다.
+         깜빡임이 이 위를 덮도록 감은 눈보다 먼저 둔다. -->
+    <g id="burst"></g>
+
     <!-- 깜빡임·졸기: 그림의 눈과 입을 얼굴색으로 덮고 감은 모양을 그린다 -->
     <g id="eyesClosed">
       <ellipse id="eyeCoverL" class="skin"/>
