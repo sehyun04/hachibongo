@@ -11,11 +11,30 @@ pub struct Settings {
     pub size: String,
     pub passthrough: bool,
     pub character: String,
+    /// 같이 하기 방 코드. 남아 있으면 켤 때 다시 들어간다.
+    pub room: Option<String>,
+    /// 중계가 같은 앱의 재접속을 알아보는 이름. 처음 켤 때 한 번 정한다.
+    pub client: Option<String>,
+    /// 중계 주소를 바꾸는 손잡이(검증할 때 이 PC 의 wrangler dev 로). 비면 기본 중계.
+    pub relay: Option<String>,
+    pub peer_x: Option<i32>,
+    pub peer_y: Option<i32>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { x: None, y: None, size: "m".into(), passthrough: false, character: "hachiware".into() }
+        Self {
+            x: None,
+            y: None,
+            size: "m".into(),
+            passthrough: false,
+            character: "hachiware".into(),
+            room: None,
+            client: None,
+            relay: None,
+            peer_x: None,
+            peer_y: None,
+        }
     }
 }
 

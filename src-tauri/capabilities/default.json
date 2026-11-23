@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "오버레이 창 권한 - 끌어 옮기기와 클릭 통과 전환만 더 연다",
-  "windows": ["main"],
+  "description": "오버레이 창 권한 - 끌어 옮기기와 클릭 통과 전환만 더 연다. peer 는 같이 하기의 상대 창",
+  "windows": ["main", "peer"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",

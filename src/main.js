@@ -4,6 +4,9 @@ const T = window.__TAURI__;
 const NS = 'http://www.w3.org/2000/svg';
 const svg = document.getElementById('stage');
 const $ = (id) => document.getElementById(id);
+// 같이 하기의 상대 창이면 Rust 가 창을 만들 때 심어 둔다(together.rs). 상대 창은 내 입력이 아니라 상대 입력으로 움직인다.
+const HACHI = window.__HACHI ?? {};
+const PEER = HACHI.role === 'peer';
 // 지금 캐릭터(chars.js). 시작할 때 setChar 가 정한다.
 let C = CHARS.hachiware;
 
@@ -100,6 +103,8 @@ function slab(top, name, r, thick, sx, sy) {
 
 const keyByVk = new Map();
 let spaceKey = null;
+// 상대가 친 발 쪽에서 고를 키. 상대가 어떤 키를 쳤는지는 오지 않아서(together.js) 글자·숫자 줄의 보통 키 중 아무거나 친다.
+const PEER_POOL = { L: [], R: [] };
 {
   const u = KB.w / 15;
   const rh = KB.h / ROWS.length;
@@ -123,7 +128,8 @@ let spaceKey = null;
       const cx = (lx0 + lx1) / 2;
       // cy 는 윗면 가운데. 발은 윗면을 친다.
       const cy = project(x + w / 2, y + (h - KEY_SIDE) / 2)[1];
-      const key = { el, side: cx < SPLIT_X ? 'L' : 'R', x0: lx0, x1: lx1, cx, cy, held: 0 };
+      const key = { el, side: cx < SPLIT_X ? 'L' : 'R', x0: lx0, x1: lx1, cx, cy, held: 0, vk: vks[0] };
+      if (r < 4 && width === 1) PEER_POOL[key.side].push(key);
       for (const vk of vks) keyByVk.set(vk, key);
       if (vks.includes(0x20)) spaceKey = key;
       off += width;
@@ -305,11 +311,58 @@ function handle(e) {
         burst(false);
       }
       cursorNx = e.nx;
-      hitTest(e.lx, e.ly);
+      // 상대 마우스는 내 창 어디에 커서가 있는지와 상관없다
+      if (e.lx !== undefined) hitTest(e.lx, e.ly);
       active();
+      break;
+    case 'h':
+      // 상대 창에 들어오는 내 커서. 끌기·클릭 통과만 가르고 캐릭터는 깨우지 않는다.
+      hitTest(e.lx, e.ly);
       break;
   }
   kick();
+}
+
+// 상대가 보낸 줄(together.js 가 중계에서 받아 넘긴다). 중계를 거쳐 온 것이라 모양을 다시 본다.
+const peerKeys = new Map();  // 상대의 누름 번호 -> 이쪽에서 고른 키
+function fromPeer(m) {
+  if (!m || typeof m !== 'object') return;
+  switch (m.t) {
+    case 'k':
+      if (m.d) {
+        if (peerKeys.has(m.i)) return;
+        const pool = PEER_POOL[m.s === 'R' ? 'R' : 'L'];
+        let key = pool[(Math.random() * pool.length) | 0];
+        for (let n = 0; n < 4 && key.held; n++) key = pool[(Math.random() * pool.length) | 0];
+        peerKeys.set(m.i, { vk: key.vk, at: now() });
+        handle({ t: 'k', vk: key.vk, d: true });
+      } else {
+        const p = peerKeys.get(m.i);
+        if (!p) return;
+        peerKeys.delete(m.i);
+        handle({ t: 'k', vk: p.vk, d: false });
+      }
+      break;
+    case 'b':
+      if (m.b === 0 || m.b === 1 || m.b === 2) handle({ t: 'b', b: m.b, d: !!m.d });
+      break;
+    case 'w':
+      handle({ t: 'w' });
+      break;
+    case 'm':
+      if (Number.isFinite(m.x) && Number.isFinite(m.y)) handle({ t: 'm', nx: clamp01(m.x), ny: clamp01(m.y) });
+      break;
+  }
+}
+
+// 떼는 줄이 끊겨 안 오면 발이 키를 누른 채 남는다. 오래 눌린 것은 놓는다.
+function releasePeer(olderThan = 0) {
+  for (const [i, p] of peerKeys) {
+    if (now() - p.at < olderThan) continue;
+    peerKeys.delete(i);
+    handle({ t: 'k', vk: p.vk, d: false });
+  }
+  for (const b of [0, 1, 2]) if (buttons[b] && olderThan === 0) handle({ t: 'b', b, d: false });
 }
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -637,16 +690,30 @@ function setChar(key) {
 
 // ---------------------------------------------------------------- 시작
 
-window.hachi = { handle, setChar };
+window.hachi = { handle, setChar, fromPeer, releasePeer };
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 const params = new URLSearchParams(location.search);
-setChar(params.get('char'));
+setChar(PEER ? HACHI.char : params.get('char'));
 blinkLoop();
 swishLoop();
 active();
 kick();
 
-if (T) {
+if (T && PEER) {
+  win = T.window.getCurrentWindow();
+  svg.addEventListener('mousedown', (e) => {
+    if (e.button === 0 && e.target !== svg) win.startDragging().catch(() => {});
+  });
+  T.event.listen('hover', ({ payload }) => handle(payload));
+  T.event.listen('peer', ({ payload }) => fromPeer(payload));
+  T.event.listen('char', ({ payload }) => setChar(payload));
+  T.event.listen('lock', ({ payload }) => {
+    locked = payload;
+    ignoring = true;
+  });
+  T.core.invoke('ready').then((s) => { locked = s.passthrough; }).catch(() => {});
+  setInterval(() => releasePeer(4000), 1000);
+} else if (T) {
   // 저장된 캐릭터를 받기 전에 하치와레가 한 번 비쳤다가 바뀌지 않게 가려 둔다.
   // 답이 끝내 안 와도 빈 창으로 남지 않게 잠시 뒤엔 무조건 보인다(한 번 원인 모르게 빈 창으로 떴다).
   svg.style.visibility = 'hidden';
@@ -655,16 +722,24 @@ if (T) {
   svg.addEventListener('mousedown', (e) => {
     if (e.button === 0 && e.target !== svg) win.startDragging().catch(() => {});
   });
-  T.event.listen('input', ({ payload }) => handle(payload));
+  T.event.listen('input', ({ payload }) => {
+    handle(payload);
+    together.share(payload);
+  });
   T.event.listen('lock', ({ payload }) => {
     locked = payload;
     ignoring = true;
   });
-  T.event.listen('char', ({ payload }) => setChar(payload));
+  T.event.listen('char', ({ payload }) => {
+    setChar(payload);
+    together.hello();
+  });
+  T.event.listen('room', ({ payload }) => together.join(payload));
   T.core.invoke('ready')
     .then((s) => {
       locked = s.passthrough;
       setChar(s.character);
+      together.start(s);
     })
     .catch(() => {})
     .finally(() => { svg.style.visibility = ''; });

@@ -2,6 +2,7 @@
 
 mod input;
 mod settings;
+mod together;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -28,6 +29,9 @@ struct Shared {
     size_items: Vec<CheckMenuItem<Wry>>,
     char_items: Vec<CheckMenuItem<Wry>>,
     pass_item: CheckMenuItem<Wry>,
+    together: together::Menu,
+    /// 지금 떠 있는 상대 창의 캐릭터
+    peer_char: Mutex<Option<String>>,
 }
 
 impl Shared {
@@ -42,12 +46,21 @@ impl Shared {
 struct Ready {
     passthrough: bool,
     character: String,
+    room: Option<String>,
+    client: Option<String>,
+    relay: Option<String>,
 }
 
 #[tauri::command]
 fn ready(shared: tauri::State<'_, Arc<Shared>>) -> Ready {
     let s = shared.settings.lock().unwrap();
-    Ready { passthrough: s.passthrough, character: s.character.clone() }
+    Ready {
+        passthrough: s.passthrough,
+        character: s.character.clone(),
+        room: s.room.clone(),
+        client: s.client.clone(),
+        relay: s.relay.clone(),
+    }
 }
 
 /// 창 모양을 정하는 두 가지. 크기 메뉴와 캐릭터 메뉴가 각각 하나씩 바꾼다.
@@ -106,15 +119,22 @@ fn on_screen(win: &WebviewWindow, x: i32, y: i32, look: &Look) -> bool {
         .unwrap_or(false)
 }
 
-fn relayout(win: &WebviewWindow, shared: &Shared, new: &Look) {
-    let old = Look::of(&shared.settings.lock().unwrap());
+/// 창 크기를 바꾼다. 기본 자리가 화면 오른쪽 아래라서 그 모서리를 붙든 채 줄이고 늘린다. 캐릭터를 바꿔도 책상은 제자리에 있고
+/// 귀가 긴 캐릭터만 위로 솟는다.
+fn fit(win: &WebviewWindow, old: &Look, new: &Look) {
     let (ow, oh) = old.physical(win);
     let (nw, nh) = new.physical(win);
     let _ = win.set_size(new.logical());
-    // 기본 자리가 화면 오른쪽 아래라서 그 모서리를 붙든 채 줄이고 늘린다. 캐릭터를 바꿔도 책상은 제자리에 있고
-    // 귀가 긴 캐릭터만 위로 솟는다.
     if let Ok(p) = win.outer_position() {
         let _ = win.set_position(PhysicalPosition::new(p.x + ow - nw, p.y + oh - nh));
+    }
+}
+
+fn relayout(app: &AppHandle, win: &WebviewWindow, shared: &Shared, new: &Look) {
+    let old = Look::of(&shared.settings.lock().unwrap());
+    fit(win, &old, new);
+    if old.size != new.size {
+        together::resize_peer(app, shared, &old.size, &new.size);
     }
     for (item, (k, _, _)) in shared.size_items.iter().zip(SIZES.iter()) {
         let _ = item.set_checked(*k == new.size);
@@ -135,10 +155,12 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
     let Some(win) = app.get_webview_window("main") else { return };
     let id = event.id().as_ref();
     let look = Look::of(&shared.settings.lock().unwrap());
-    if let Some(key) = id.strip_prefix("size:") {
-        relayout(&win, &shared, &Look { size: key.to_string(), ..look });
+    if id.starts_with("together:") {
+        together::on_menu(app, &shared, id);
+    } else if let Some(key) = id.strip_prefix("size:") {
+        relayout(app, &win, &shared, &Look { size: key.to_string(), ..look });
     } else if let Some(key) = id.strip_prefix("char:") {
-        relayout(&win, &shared, &Look { character: key.to_string(), ..look });
+        relayout(app, &win, &shared, &Look { character: key.to_string(), ..look });
         let _ = app.emit_to("main", "char", key);
     } else if id == "pass" {
         let on = {
@@ -150,11 +172,16 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
         // 끌 때도 일단 통과로 둔다. 커서가 그림 위로 오면 웹뷰가 다시 연다.
         let _ = win.set_ignore_cursor_events(true);
         let _ = app.emit_to("main", "lock", on);
+        if let Some(peer) = app.get_webview_window("peer") {
+            let _ = peer.set_ignore_cursor_events(true);
+            let _ = app.emit_to("peer", "lock", on);
+        }
         shared.save_now();
     } else if id == "reset" {
         if let Some(p) = default_position(&win, &look) {
             let _ = win.set_position(p);
         }
+        together::reset_peer(app, &shared);
     } else if id == "quit" {
         shared.save_now();
         app.exit(0);
@@ -163,12 +190,19 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![ready])
+        .invoke_handler(tauri::generate_handler![ready, together::peer, together::together_status])
         .setup(|app| {
             let handle = app.handle().clone();
             let path = settings::path(&handle);
             let mut s = Settings::load(&path);
             let win = app.get_webview_window("main").expect("main window");
+            // 메뉴 막대 아이콘만 두고 독에는 안 띄운다. 책상 위 소품이지 앱 창이 아니라서.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            if s.client.is_none() {
+                s.client = Some(together::client_id());
+                s.save(&path);
+            }
 
             let size_items = SIZES
                 .iter()
@@ -190,7 +224,8 @@ fn main() {
             let reset = MenuItem::with_id(app, "reset", "위치 초기화", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
-            let menu = Menu::with_items(app, &[&char_menu, &size_menu, &pass_item, &reset, &sep, &quit])?;
+            let (together_menu, together) = together::build(app, &s)?;
+            let menu = Menu::with_items(app, &[&char_menu, &size_menu, &together_menu, &pass_item, &reset, &sep, &quit])?;
 
             let look = Look::of(&s);
             let saved = s.x.zip(s.y);
@@ -201,6 +236,8 @@ fn main() {
                 size_items,
                 char_items,
                 pass_item,
+                together,
+                peer_char: Mutex::new(None),
             });
             app.manage(shared.clone());
 
@@ -244,7 +281,8 @@ fn main() {
                 });
             }
 
-            input::start(handle, win.hwnd()?.0 as isize);
+            input::MAIN.attach(&win);
+            input::start(handle);
             win.show()?;
             Ok(())
         })
