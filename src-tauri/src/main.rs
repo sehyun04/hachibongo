@@ -2,6 +2,7 @@
 
 mod input;
 mod settings;
+mod single;
 mod together;
 
 use std::path::PathBuf;
@@ -196,6 +197,10 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
             let path = settings::path(&handle);
+            // 트레이 아이콘·창을 만들기 전에 나가야 두 번째 앱의 흔적이 안 남는다
+            if !single::claim(&path) {
+                std::process::exit(0);
+            }
             let mut s = Settings::load(&path);
             let win = app.get_webview_window("main").expect("main window");
             // 메뉴 막대 아이콘만 두고 독에는 안 띄운다. 책상 위 소품이지 앱 창이 아니라서.
@@ -243,6 +248,10 @@ fn main() {
                 peer_gate: tauri::async_runtime::Mutex::new(0),
             });
             app.manage(shared.clone());
+            {
+                let s = shared.clone();
+                single::watch_quit(handle.clone(), &shared.path, move || s.save_now());
+            }
 
             TrayIconBuilder::with_id("tray")
                 .icon(app.default_window_icon().expect("icon").clone())
