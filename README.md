@@ -73,7 +73,9 @@ npm run dev            # 디버그 실행
 `hachibongo-mac` 을 받아 풀면 `hachibongo.app` 이다. 인텔·애플 실리콘 둘 다 열린다. 직접 구울 때는 맥에서 `npm install` 뒤
 `npx tauri build --bundles app`.
 
-- 임시 서명이라 처음 열 때 "확인되지 않은 개발자"로 막힌다. 앱을 오른쪽 클릭 → 열기, 또는 터미널에서 `xattr -dr com.apple.quarantine hachibongo.app`.
+- 임시 서명이라 처음 열 때 막힌다. 응용 프로그램으로 옮긴 뒤 터미널에서 `xattr -dr com.apple.quarantine /Applications/hachibongo.app`.
+  터미널을 안 쓰면 한 번 열어 막힌 다음 시스템 설정 → 개인정보 보호 및 보안 맨 아래의 '그래도 열기'.
+  오른쪽 클릭 → 열기는 맥OS 14 까지만 된다.
 - 처음 켜면 **입력 모니터링** 허락을 묻는다(시스템 설정 → 개인정보 보호 및 보안). 허락하면 다시 켜지 않아도 몇 초 안에 키를 받는다.
   그래도 안 붙으면 **손쉬운 사용** 허락을 한 번 더 묻는다. 허락 전에도 커서 따라가기는 된다.
 - 새로 구운 판으로 바꾸면 맥이 다른 앱으로 보고 허락을 다시 묻는다(임시 서명이라서).
