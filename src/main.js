@@ -7,6 +7,9 @@ const $ = (id) => document.getElementById(id);
 // 같이 하기의 상대 창이면 Rust 가 창을 만들 때 심어 둔다(together.rs). 상대 창은 내 입력이 아니라 상대 입력으로 움직인다.
 const HACHI = window.__HACHI ?? {};
 const PEER = HACHI.role === 'peer';
+// 이벤트는 내 창 앞으로 온 것만 받는다. 그냥 listen 하면 Rust 가 다른 창 앞으로 보낸 것까지 받아서,
+// 상대 캐릭터가 바뀔 때 내 캐릭터도 같이 바뀌었다.
+const on = (name, fn) => T.event.listen(name, fn, { target: PEER ? 'peer' : 'main' });
 // 지금 캐릭터(chars.js). 시작할 때 setChar 가 정한다.
 let C = CHARS.hachiware;
 
@@ -704,10 +707,10 @@ if (T && PEER) {
   svg.addEventListener('mousedown', (e) => {
     if (e.button === 0 && e.target !== svg) win.startDragging().catch(() => {});
   });
-  T.event.listen('hover', ({ payload }) => handle(payload));
-  T.event.listen('peer', ({ payload }) => fromPeer(payload));
-  T.event.listen('char', ({ payload }) => setChar(payload));
-  T.event.listen('lock', ({ payload }) => {
+  on('hover', ({ payload }) => handle(payload));
+  on('peer', ({ payload }) => fromPeer(payload));
+  on('char', ({ payload }) => setChar(payload));
+  on('lock', ({ payload }) => {
     locked = payload;
     ignoring = true;
   });
@@ -722,19 +725,19 @@ if (T && PEER) {
   svg.addEventListener('mousedown', (e) => {
     if (e.button === 0 && e.target !== svg) win.startDragging().catch(() => {});
   });
-  T.event.listen('input', ({ payload }) => {
+  on('input', ({ payload }) => {
     handle(payload);
     together.share(payload);
   });
-  T.event.listen('lock', ({ payload }) => {
+  on('lock', ({ payload }) => {
     locked = payload;
     ignoring = true;
   });
-  T.event.listen('char', ({ payload }) => {
+  on('char', ({ payload }) => {
     setChar(payload);
     together.hello();
   });
-  T.event.listen('room', ({ payload }) => together.join(payload));
+  on('room', ({ payload }) => together.join(payload));
   T.core.invoke('ready')
     .then((s) => {
       locked = s.passthrough;

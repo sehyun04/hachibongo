@@ -148,9 +148,16 @@ pub fn together_status(shared: tauri::State<'_, Arc<Shared>>, text: String) {
 
 /// 상대 창을 띄우거나(캐릭터 이름) 닫는다(None). 웹뷰가 상대의 인사·나감을 받을 때 부른다.
 /// 창을 만드는 일은 동기 명령에서 하면 Windows 에서 멈출 수 있어 async 로 둔다.
+/// async 명령은 저마다 따로 돌아서 닫기 바로 뒤의 띄우기가 먼저 끝날 수 있다. 한 줄로 세우고,
+/// 웹뷰가 붙인 번호(`seq`)로 이미 더 나중 요청을 따랐으면 늦게 온 것은 버린다.
 #[tauri::command]
-pub async fn peer(app: AppHandle, character: Option<String>) -> Result<(), String> {
+pub async fn peer(app: AppHandle, character: Option<String>, seq: u64) -> Result<(), String> {
     let shared = app.state::<Arc<Shared>>().inner().clone();
+    let mut last = shared.peer_gate.lock().await;
+    if seq <= *last {
+        return Ok(());
+    }
+    *last = seq;
     let Some(c) = character else {
         close_peer(&app, &shared);
         return Ok(());

@@ -42,10 +42,24 @@ const together = (() => {
     send({ t: 'hello', c: document.documentElement.dataset.char || 'hachiware' });
   }
 
+  // 상대 창 띄우기·닫기는 Rust 에서 따로따로 돌아서, 닫기 바로 뒤의 띄우기가 먼저 끝나면 창이 사라진 채 남았다.
+  // 번호를 붙여 Rust 가 가장 나중 것만 따르게 한다. 시각을 섞어 웹뷰를 새로 읽어도 번호가 뒤로 가지 않는다.
+  let peerSeq = 0;
+  const nextSeq = () => (peerSeq = Math.max(peerSeq + 1, Date.now() * 1000));
+
+  function showPeer(c, tries = 0) {
+    peer = c;
+    const seq = nextSeq();
+    T.core.invoke('peer', { character: c, seq }).catch(() => {
+      // 창을 못 띄웠으면 몇 번 다시. 그새 상대가 바뀌었거나 나갔으면 그만둔다.
+      if (tries < 3) setTimeout(() => { if (peer === c && peerSeq === seq) showPeer(c, tries + 1); }, 2000);
+    });
+  }
+
   function peerGone() {
     if (peer === null) return;
     peer = null;
-    T.core.invoke('peer', { character: null }).catch(() => {});
+    T.core.invoke('peer', { character: null, seq: nextSeq() }).catch(() => {});
   }
 
   function connect() {
@@ -100,14 +114,16 @@ const together = (() => {
         peerGone();
         status('상대가 나갔어요 · 기다리는 중');
         break;
-      case 'hello':
+      case 'hello': {
         if (typeof m.c !== 'string' || !Object.hasOwn(CHARS, m.c)) return;
-        if (peer !== m.c) {
-          peer = m.c;
-          T.core.invoke('peer', { character: m.c }).catch(() => {});
-        }
+        const first = peer === null;
+        if (peer !== m.c) showPeer(m.c);
+        // 처음 만난 상대에게는 내 캐릭터도 다시 알린다. 들어왔다는 알림(join)에 답한 인사가 길에서 사라지면
+        // 상대는 내 캐릭터를 모른 채 다시 접속할 때까지 빈손으로 남는다.
+        if (first) hello();
         status(`같이 하는 중 · 상대는 ${nameOf(m.c)}`);
         break;
+      }
       default:
         if (peer !== null) T.event.emitTo('peer', 'peer', m).catch(() => {});
     }

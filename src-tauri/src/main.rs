@@ -32,6 +32,8 @@ struct Shared {
     together: together::Menu,
     /// 지금 떠 있는 상대 창의 캐릭터
     peer_char: Mutex<Option<String>>,
+    /// 상대 창 띄우기·닫기를 한 줄로 세운다. 안의 값은 마지막으로 따른 요청 번호.
+    peer_gate: tauri::async_runtime::Mutex<u64>,
 }
 
 impl Shared {
@@ -238,6 +240,7 @@ fn main() {
                 pass_item,
                 together,
                 peer_char: Mutex::new(None),
+                peer_gate: tauri::async_runtime::Mutex::new(0),
             });
             app.manage(shared.clone());
 
