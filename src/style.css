@@ -95,16 +95,23 @@ html, body {
 .tail-o { stroke: var(--ink); stroke-width: 27; }
 .tail-b { stroke: var(--cap); stroke-width: 17.4; }
 
-/* 머리 오른쪽 위 구름 이름표: 캐릭터 색 구름에 그림과 같은 검은 테. 머리보다 작게.
-   테 층은 두께의 절반이 칠 층에 덮이므로 보이는 테(1.6)의 두 배로 긋는다. */
-#tag { pointer-events: none; --tag: #c9e1ee; }
-:root[data-char="chiikawa"] #tag { --tag: #fdd3dd; }
-:root[data-char="usagi"] #tag { --tag: #f9e4a4; }
-#tagLine { fill: var(--ink); stroke: var(--ink); stroke-width: 3.2; }
-#tagFill { fill: var(--tag); }
+/* 이름표 글꼴: 주아(OFL, fonts/Jua-OFL.txt). 둥글고 굵어서 그림의 굵은 선과 어울린다. 앱에 박아 두어야 어느 컴퓨터에서나 같다.
+   한글 2350자 남짓만 들어 있어 드문 글자는 아래 맑은 고딕·애플 고딕으로 나온다. */
+@font-face {
+  font-family: "Jua";
+  src: url("fonts/Jua.woff2") format("woff2");
+  font-display: block;
+}
+
+/* 머리 위 이름표: 졸 때 뜨는 Z 처럼 캐릭터 색 글자에 검은 테. 테는 글자 뒤로 깔아(paint-order) 글자 획이 가늘어지지 않게 한다. */
+#tag { pointer-events: none; }
 #tagText {
-  font: 700 13px "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
-  fill: var(--ink);
+  font: 17px "Jua", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  fill: var(--z);
+  stroke: var(--ink);
+  stroke-width: 3.2;
+  stroke-linejoin: round;
+  paint-order: stroke;
   text-anchor: middle;
   dominant-baseline: central;
 }

@@ -10,7 +10,7 @@ use tauri::menu::{IsMenuItem, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{App, AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent, Wry};
 
 use crate::settings::Settings;
-use crate::{input, on_screen, Look, Shared, CHARS};
+use crate::{input, on_screen, scale_of, Look, Shared, CHARS};
 
 /// 헷갈리는 글자(i·l·o·0·1)를 뺐다. 10자면 약 50비트라 남이 맞혀 들어올 수 없다.
 const ALPHABET: &[u8] = b"abcdefghjkmnpqrstuvwxyz23456789";
@@ -163,13 +163,13 @@ pub async fn peer(app: AppHandle, character: Option<String>, seq: u64) -> Result
         return Ok(());
     };
     let c = if CHARS.iter().any(|x| x.0 == c) { c } else { CHARS[0].0.to_string() };
-    let size = shared.settings.lock().unwrap().size.clone();
-    let look = Look { size, character: c.clone() };
+    let scale = scale_of(&shared.settings.lock().unwrap());
+    let look = Look { scale, character: c.clone() };
     let before = shared.peer_char.lock().unwrap().replace(c.clone());
 
     if let Some(w) = app.get_webview_window("peer") {
         if let Some(old) = before {
-            crate::fit(&w, &Look { size: look.size.clone(), character: old }, &look);
+            crate::fit(&w, &Look { scale, character: old }, &look);
         }
         let _ = app.emit_to("peer", "char", &c);
         return Ok(());
@@ -252,21 +252,17 @@ pub fn beside_main(app: &AppHandle, peer: &WebviewWindow, look: &Look) -> Option
 pub fn reset_peer(app: &AppHandle, shared: &Shared) {
     let Some(w) = app.get_webview_window("peer") else { return };
     let Some(c) = shared.peer_char.lock().unwrap().clone() else { return };
-    let look = Look { size: shared.settings.lock().unwrap().size.clone(), character: c };
+    let look = Look { scale: scale_of(&shared.settings.lock().unwrap()), character: c };
     if let Some(p) = beside_main(app, &w, &look) {
         let _ = w.set_position(p);
     }
 }
 
-/// 크기 메뉴를 바꾸면 상대 창도 같은 배율로.
-pub fn resize_peer(app: &AppHandle, shared: &Shared, old_size: &str, new_size: &str) {
+/// 크기를 바꾸면(메뉴·휠) 상대 창도 같은 배율로. 붙드는 자리(`anchor`)는 내 창과 같게 한다.
+pub fn resize_peer(app: &AppHandle, shared: &Shared, old: f64, new: f64, anchor: f64) {
     let Some(w) = app.get_webview_window("peer") else { return };
     let Some(c) = shared.peer_char.lock().unwrap().clone() else { return };
-    crate::fit(
-        &w,
-        &Look { size: old_size.to_string(), character: c.clone() },
-        &Look { size: new_size.to_string(), character: c },
-    );
+    crate::fit_at(&w, &Look { scale: old, character: c.clone() }, &Look { scale: new, character: c }, anchor);
 }
 
 #[cfg(test)]

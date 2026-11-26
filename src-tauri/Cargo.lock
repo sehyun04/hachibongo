@@ -1255,7 +1255,7 @@ dependencies = [
 
 [[package]]
 name = "hachibongo"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "arboard",
  "getrandom 0.3.4",

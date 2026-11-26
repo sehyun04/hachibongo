@@ -9,7 +9,6 @@
     --ink: #000000;
     --desk: #fbf4ea;
     --cap: #86b5cf;
-    --pad: #e2eef4;
     --muted: #8a7a66;
   }
   html, body {
@@ -29,31 +28,21 @@
     flex-direction: column;
     gap: 12px;
   }
-  /* 머리 위에 뜰 모양 그대로 미리 본다 */
-  .preview { display: flex; justify-content: center; padding-bottom: 4px; }
+  /* 머리 위에 뜰 모양 그대로 미리 본다: 주아 글꼴, 캐릭터 색 글자에 검은 테(style.css 의 #tagText 와 같은 결) */
+  @font-face {
+    font-family: "Jua";
+    src: url("fonts/Jua.woff2") format("woff2");
+    font-display: block;
+  }
+  .preview { display: flex; justify-content: center; min-height: 30px; }
   .tag {
-    position: relative;
-    min-width: 18px;
-    padding: 1px 9px;
-    border: 1.6px solid var(--ink);
-    border-radius: 999px;
-    background: var(--pad);
-    font-weight: 700;
-    font-size: 13px;
-    line-height: 18px;
-    text-align: center;
+    font: 22px "Jua", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    color: var(--cap);
     white-space: pre;
+    text-shadow:
+      -1.6px -1.6px 0 var(--ink), 0 -1.6px 0 var(--ink), 1.6px -1.6px 0 var(--ink), 1.6px 0 0 var(--ink),
+      1.6px 1.6px 0 var(--ink), 0 1.6px 0 var(--ink), -1.6px 1.6px 0 var(--ink), -1.6px 0 0 var(--ink);
   }
-  .tag::before, .tag::after {
-    content: "";
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 5px solid transparent;
-    border-bottom: 0;
-  }
-  .tag::before { top: 100%; border-top: 5px solid var(--ink); margin-top: 0.4px; }
-  .tag::after { top: 100%; border-top: 3.6px solid var(--pad); border-width: 3.6px 3.6px 0; margin-top: -0.4px; }
   input {
     font: inherit;
     padding: 8px 11px;

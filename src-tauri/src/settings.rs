@@ -25,6 +25,8 @@ pub struct Settings {
     pub nametag: bool,
     /// 저장된 자리가 이름표 자리만큼 창이 위로 늘어난 뒤의 것인지. 그 전 판의 자리는 켤 때 한 번 올려 준다.
     pub tag_room: bool,
+    /// 캐릭터 위에서 휠로 맞춘 배율. 있으면 크기 메뉴(size)보다 앞선다. 크기 메뉴를 고르면 지운다.
+    pub zoom: Option<f64>,
 }
 
 impl Default for Settings {
@@ -43,6 +45,7 @@ impl Default for Settings {
             name: None,
             nametag: true,
             tag_room: false,
+            zoom: None,
         }
     }
 }

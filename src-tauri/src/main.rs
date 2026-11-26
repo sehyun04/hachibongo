@@ -21,10 +21,12 @@ use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, RunEvent
 // 그림의 viewBox 크기. 창은 이 비율 그대로 배율만 바꾼다.
 const BASE_W: f64 = 320.0;
 const SIZES: [(&str, &str, f64); 3] = [("s", "작게", 0.7), ("m", "보통", 0.9), ("l", "크게", 1.2)];
+// 휠로 맞출 수 있는 배율. 더 작으면 키보드 글자가 뭉개지고, 더 크면 화면을 너무 가린다.
+const ZOOM: (f64, f64) = (0.45, 2.0);
 // 캐릭터와 그 viewBox 높이. 우사기는 귀가 길어 창이 위로 56 늘어난다.
 // 높이는 scripts/measure-chars.py 가 알려 주는 값(274 - chars.js 의 top)과 같아야 한다.
 const CHARS: [(&str, &str, f64); 3] = [("hachiware", "하치와레", 274.0), ("chiikawa", "치이카와", 274.0), ("usagi", "우사기", 330.0)];
-// 이름표 구름 자리. 그림이 창 위끝까지 차 있어서 창을 이만큼 위로 늘린다(main.js 의 TAG_ROOM 과 같아야 한다).
+// 이름표 자리. 그림이 창 위끝까지 차 있어서 창을 이만큼 위로 늘린다(main.js 의 TAG_ROOM 과 같아야 한다).
 // 이름표를 꺼도 줄이지 않는다 — 켜고 끌 때마다 창이 들썩이지 않게.
 const TAG_ROOM: f64 = 26.0;
 
@@ -81,19 +83,23 @@ fn ready(shared: tauri::State<'_, Arc<Shared>>) -> Ready {
     }
 }
 
-/// 창 모양을 정하는 두 가지. 크기 메뉴와 캐릭터 메뉴가 각각 하나씩 바꾼다.
+/// 크기 메뉴로 고른 배율, 휠로 맞췄으면 그 배율.
+fn scale_of(s: &Settings) -> f64 {
+    s.zoom
+        .filter(|z| z.is_finite())
+        .map(|z| z.clamp(ZOOM.0, ZOOM.1))
+        .unwrap_or_else(|| SIZES.iter().find(|x| x.0 == s.size).map(|x| x.2).unwrap_or(0.9))
+}
+
+/// 창 모양을 정하는 두 가지. 크기(메뉴·휠)와 캐릭터 메뉴가 각각 하나씩 바꾼다.
 struct Look {
-    size: String,
+    scale: f64,
     character: String,
 }
 
 impl Look {
     fn of(s: &Settings) -> Self {
-        Self { size: s.size.clone(), character: s.character.clone() }
-    }
-
-    fn scale(&self) -> f64 {
-        SIZES.iter().find(|s| s.0 == self.size).map(|s| s.2).unwrap_or(0.9)
+        Self { scale: scale_of(s), character: s.character.clone() }
     }
 
     fn base_h(&self) -> f64 {
@@ -101,11 +107,11 @@ impl Look {
     }
 
     fn logical(&self) -> LogicalSize<f64> {
-        LogicalSize::new(BASE_W * self.scale(), self.base_h() * self.scale())
+        LogicalSize::new(BASE_W * self.scale, self.base_h() * self.scale)
     }
 
     fn physical(&self, win: &WebviewWindow) -> (i32, i32) {
-        let f = win.scale_factor().unwrap_or(1.0) * self.scale();
+        let f = win.scale_factor().unwrap_or(1.0) * self.scale;
         ((BASE_W * f).round() as i32, (self.base_h() * f).round() as i32)
     }
 }
@@ -137,35 +143,62 @@ fn on_screen(win: &WebviewWindow, x: i32, y: i32, look: &Look) -> bool {
         .unwrap_or(false)
 }
 
-/// 창 크기를 바꾼다. 기본 자리가 화면 오른쪽 아래라서 그 모서리를 붙든 채 줄이고 늘린다. 캐릭터를 바꿔도 책상은 제자리에 있고
-/// 귀가 긴 캐릭터만 위로 솟는다.
-fn fit(win: &WebviewWindow, old: &Look, new: &Look) {
+/// 창 크기를 바꾼다. 아래 끝은 늘 붙든다 — 책상은 제자리에 있고 귀가 긴 캐릭터만 위로 솟는다.
+/// 가로는 `anchor`(0 왼쪽 ~ 1 오른쪽) 자리를 붙든다. 메뉴로 바꿀 때는 기본 자리(화면 오른쪽 아래)에 맞춰 오른쪽,
+/// 휠로 바꿀 때는 가운데 — 커서가 캐릭터 위에 있는데 한쪽 끝을 붙들면 캐릭터가 커서 밑에서 빠져나간다.
+fn fit_at(win: &WebviewWindow, old: &Look, new: &Look, anchor: f64) {
     let (ow, oh) = old.physical(win);
     let (nw, nh) = new.physical(win);
     let _ = win.set_size(new.logical());
     if let Ok(p) = win.outer_position() {
-        let _ = win.set_position(PhysicalPosition::new(p.x + ow - nw, p.y + oh - nh));
+        let dx = ((ow - nw) as f64 * anchor).round() as i32;
+        let _ = win.set_position(PhysicalPosition::new(p.x + dx, p.y + oh - nh));
     }
 }
 
-fn relayout(app: &AppHandle, win: &WebviewWindow, shared: &Shared, new: &Look) {
-    let old = Look::of(&shared.settings.lock().unwrap());
-    fit(win, &old, new);
-    if old.size != new.size {
-        together::resize_peer(app, shared, &old.size, &new.size);
-    }
+fn fit(win: &WebviewWindow, old: &Look, new: &Look) {
+    fit_at(win, old, new, 1.0);
+}
+
+/// 크기 메뉴 체크는 휠로 맞춘 배율이 없을 때만 그 메뉴에 둔다.
+fn check_sizes(shared: &Shared) {
+    let s = shared.settings.lock().unwrap();
     for (item, (k, _, _)) in shared.size_items.iter().zip(SIZES.iter()) {
-        let _ = item.set_checked(*k == new.size);
+        let _ = item.set_checked(s.zoom.is_none() && s.size == *k);
     }
+}
+
+fn relayout(app: &AppHandle, win: &WebviewWindow, shared: &Shared, old: &Look, new: &Look) {
+    fit(win, old, new);
+    if (old.scale - new.scale).abs() > 1e-9 {
+        together::resize_peer(app, shared, old.scale, new.scale, 1.0);
+    }
+    check_sizes(shared);
     for (item, (k, _, _)) in shared.char_items.iter().zip(CHARS.iter()) {
         let _ = item.set_checked(*k == new.character);
     }
-    {
-        let mut s = shared.settings.lock().unwrap();
-        s.size = new.size.clone();
-        s.character = new.character.clone();
-    }
+    shared.settings.lock().unwrap().character = new.character.clone();
     shared.save_now();
+}
+
+/// 캐릭터 위에서 휠을 굴리면 웹뷰가 부른다. 같이 하기 상대 창도 같은 배율로 따라간다.
+#[tauri::command]
+fn zoom(app: AppHandle, shared: tauri::State<'_, Arc<Shared>>, factor: f64) {
+    if !factor.is_finite() || factor <= 0.0 {
+        return;
+    }
+    let Some(win) = app.get_webview_window("main") else { return };
+    let old = Look::of(&shared.settings.lock().unwrap());
+    let scale = (old.scale * factor).clamp(ZOOM.0, ZOOM.1);
+    if (scale - old.scale).abs() < 1e-4 {
+        return;
+    }
+    fit_at(&win, &old, &Look { scale, character: old.character.clone() }, 0.5);
+    together::resize_peer(&app, &shared, old.scale, scale, 0.5);
+    shared.settings.lock().unwrap().zoom = Some(scale);
+    check_sizes(&shared);
+    // 휠은 한 번에 여러 번 오므로 바로 쓰지 않고 2초마다 모아 쓰는 쪽에 맡긴다
+    shared.dirty.store(true, Ordering::Relaxed);
 }
 
 fn on_menu(app: &AppHandle, event: MenuEvent) {
@@ -178,9 +211,16 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
     } else if id.starts_with("tag:") {
         nametag::on_menu(app, &shared, id);
     } else if let Some(key) = id.strip_prefix("size:") {
-        relayout(app, &win, &shared, &Look { size: key.to_string(), ..look });
+        let new = {
+            let mut s = shared.settings.lock().unwrap();
+            s.size = key.to_string();
+            s.zoom = None;
+            Look::of(&s)
+        };
+        relayout(app, &win, &shared, &look, &new);
     } else if let Some(key) = id.strip_prefix("char:") {
-        relayout(app, &win, &shared, &Look { character: key.to_string(), ..look });
+        let new = Look { character: key.to_string(), scale: look.scale };
+        relayout(app, &win, &shared, &look, &new);
         let _ = app.emit_to("main", "char", key);
     } else if id == "pass" {
         let on = {
@@ -215,6 +255,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             ready,
+            zoom,
             together::peer,
             together::together_status,
             nametag::set_name,
@@ -238,7 +279,7 @@ fn main() {
             }
             // 이름표 자리만큼 창이 위로 늘어났다. 예전 자리를 그대로 쓰면 책상이 그만큼 내려앉으므로 한 번 올려 준다.
             if !s.tag_room {
-                let dy = (TAG_ROOM * Look::of(&s).scale() * win.scale_factor().unwrap_or(1.0)).round() as i32;
+                let dy = (TAG_ROOM * scale_of(&s) * win.scale_factor().unwrap_or(1.0)).round() as i32;
                 s.y = s.y.map(|y| y - dy);
                 s.peer_y = s.peer_y.map(|y| y - dy);
                 s.tag_room = true;
@@ -247,7 +288,9 @@ fn main() {
 
             let size_items = SIZES
                 .iter()
-                .map(|(k, label, _)| CheckMenuItem::with_id(app, format!("size:{k}"), *label, true, s.size == *k, None::<&str>))
+                .map(|(k, label, _)| {
+                    CheckMenuItem::with_id(app, format!("size:{k}"), *label, true, s.zoom.is_none() && s.size == *k, None::<&str>)
+                })
                 .collect::<tauri::Result<Vec<_>>>()?;
             let size_refs: Vec<&dyn IsMenuItem<Wry>> = size_items.iter().map(|i| i as &dyn IsMenuItem<Wry>).collect();
             let size_menu = Submenu::with_id_and_items(app, "size", "크기", true, &size_refs)?;

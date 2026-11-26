@@ -664,14 +664,10 @@ function frame(t) {
 // ---------------------------------------------------------------- 이름표
 
 // 이름표 자리. 그림이 창 위끝까지 차 있어서 창을 이만큼 위로 늘렸다(main.rs 의 TAG_ROOM 과 같아야 한다).
-// 몸이 4도까지 기울면 긴 이름의 구름 끝이 그만큼 더 올라가서, 그때도 안 잘릴 만큼 둔다.
+// 몸이 4도까지 기울면 긴 이름의 끝이 그만큼 더 올라가서, 그때도 안 잘릴 만큼 둔다.
 const TAG_ROOM = 26;
-// 머리 오른쪽 위(1시 쪽)에 뜨는 구름의 가운데와, 이름이 길 때 구름 오른쪽 끝이 넘지 않을 자리.
-// 캐릭터마다 귀 모양이 달라 눈으로 맞췄다 — 하치와레·치이카와는 오른쪽 귀 위라서 졸 때 뜨는 Z(#zzz) 앞에서 멈추고
-// 왼쪽(머리 위)으로 늘어난다. 귀가 긴 우사기는 귀 오른편이라 Z 보다 높아서 귀를 덮지 않게 오른쪽으로 늘어난다.
-const TAG_AT = { hachiware: [250, 2, 298], chiikawa: [248, 4, 300], usagi: [266, -26, 386] };
-// 구름 몸통 높이와 글자 양옆 여백, 위아래로 부푼 뭉게 크기. 머리보다 눈에 띄지 않게 작다.
-const TAG = { h: 18, pad: 6, top: 8, bottom: 5.5 };
+// 글자 가운데가 머리 꼭대기에서 이만큼 위. 글자는 머리보다 작게.
+const TAG_LIFT = 12;
 let tagName = '';
 let tagOn = true;
 
@@ -679,41 +675,27 @@ let tagOn = true;
 const cleanName = (s) =>
   Array.from(String(s ?? '').replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, 10).join('');
 
-/**
- * 구름을 이루는 동그라미들: 양 끝 반원, 위로 부푼 뭉게, 아래 작은 뭉게, 머리 쪽으로 떨어지는 방울 둘.
- * 방울은 구름 왼쪽 아래에 달되, 긴 이름으로 구름이 왼쪽으로 늘어나도 맞춘 자리(dropX) 밖으로는 안 간다 — 반대쪽 귀 위로 떨어지지 않게.
- */
-function cloudOf(x, y, w, dropX) {
-  const { h, top, bottom } = TAG;
-  const r = h / 2;
-  const span = w - h;
-  // 짧은 이름도 위로 두 번은 부풀어야 구름으로 보인다
-  const n = Math.max(2, Math.round(span / 11));
-  const c = [[x + r, y + r, r], [x + w - r, y + r, r]];
-  for (let i = 0; i < n; i++) c.push([x + r + ((i + 0.5) / n) * span, y + 1.5, top + (i % 2) * 1.4]);
-  for (let i = 0; i < n; i++) c.push([x + r + ((i + 0.5) / n) * span, y + h - 0.5, bottom]);
-  const d = Math.max(x + 3, dropX);
-  c.push([d, y + h + 6, 3], [d - 6, y + h + 12, 2]);
-  return c;
+/** 실루엣(hit) 맨 위 언저리의 가운데와 꼭대기 높이. 하치와레는 머리가 그림 가운데보다 오른쪽에 있다. */
+function headOf(c) {
+  const n = c.hit.match(/-?\d+(?:\.\d+)?/g).map(Number);
+  let top = Infinity;
+  for (let i = 1; i < n.length; i += 2) top = Math.min(top, n[i]);
+  const xs = [];
+  for (let i = 0; i < n.length; i += 2) if (n[i + 1] < top + 6) xs.push(n[i]);
+  return [(Math.min(...xs) + Math.max(...xs)) / 2, top];
 }
 
-// 몸(#body) 안에 있어서 몸이 기울면 같이 기운다. 클릭은 받지 않는다(style.css) — 이름표 위는 뒤 창을 눌러야 한다.
-// 테는 동그라미마다 굵게 그은 뒤 그 위를 같은 동그라미로 칠해 덮는다. 겹친 안쪽 테는 가려지고 바깥 테두리만 남는다.
+// 머리 위 가운데에 글자만 띄운다 — 졸 때 뜨는 Z 와 같은 결(캐릭터 색 글자에 검은 테, style.css).
+// 몸(#body) 안에 있어서 몸이 기울면 같이 기운다. 클릭은 받지 않는다 — 이름 위는 뒤 창을 눌러야 한다.
 function drawTag() {
   const show = tagOn && tagName !== '';
   $('tag').style.display = show ? '' : 'none';
   if (!show) return;
+  C.head ??= headOf(C);
+  const [cx, top] = C.head;
   const text = $('tagText');
   text.textContent = tagName;
-  const { h, pad } = TAG;
-  const w = Math.max(h + 10, text.getComputedTextLength() + pad * 2);
-  const [ax, ay, right] = TAG_AT[document.documentElement.dataset.char] ?? TAG_AT.hachiware;
-  const x = n2(Math.min(ax - w / 2, right - w)), y = n2(ay - h / 2);
-  const parts = cloudOf(x, y, w, ax - 19).map(([cx, cy, r]) => `<circle cx="${n2(cx)}" cy="${n2(cy)}" r="${n2(r)}"/>`).join('')
-    + `<rect x="${x + h / 2}" y="${y}" width="${n2(w - h)}" height="${h}"/>`;
-  $('tagLine').innerHTML = parts;
-  $('tagFill').innerHTML = parts;
-  setAttrs(text, { x: n2(x + w / 2), y: n2(y + h / 2 + 0.5) });
+  setAttrs(text, { x: n2(cx), y: n2(top - TAG_LIFT) });
 }
 
 function setTag(name, on = tagOn) {
@@ -757,6 +739,25 @@ function setChar(key) {
 // ---------------------------------------------------------------- 시작
 
 window.hachi = { handle, setChar, setTag, fromPeer, releasePeer };
+
+// 캐릭터 위에서 휠을 굴리면 크기를 바꾼다(main.rs 의 zoom). 휠 한 칸(100)에 약 15%.
+// 터치패드는 잘게 여러 번 오므로 한 프레임치를 모아 한 번에 보낸다. 클릭 통과(고정)일 때는 창이 휠을 받지 않는다.
+let wheelSum = 0;
+let wheelRaf = 0;
+function onWheel(e) {
+  e.preventDefault();
+  // 끌기처럼 그림 위에서만. 투명한 곳은 원래 뒤 창 몫이다.
+  if (e.target === svg) return;
+  wheelSum += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+  if (wheelRaf) return;
+  wheelRaf = requestAnimationFrame(() => {
+    wheelRaf = 0;
+    const factor = Math.exp(-wheelSum * 0.0015);
+    wheelSum = 0;
+    T.core.invoke('zoom', { factor }).catch(() => {});
+  });
+}
+if (T) svg.addEventListener('wheel', onWheel, { passive: false });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 const params = new URLSearchParams(location.search);
 setChar(PEER ? HACHI.char : params.get('char'));
