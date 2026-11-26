@@ -275,7 +275,7 @@ struct Pointer {
     key: (i64, i64),
 }
 
-fn log_line(line: &str) {
+pub(crate) fn log_line(line: &str) {
     use std::io::Write;
     let Some(path) = std::env::var_os("HACHIBONGO_LOG") else { return };
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {

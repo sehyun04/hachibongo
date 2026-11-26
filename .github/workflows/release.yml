@@ -1,0 +1,166 @@
+# 새 판 굽기와 내보내기. `v0.2.1` 같은 태그를 올리면 윈도우 설치 파일·맥 dmg 를 굽고 서명해서 GitHub 릴리스로 낸다.
+# 깔린 앱들은 맨 마지막 릴리스의 latest.json 을 보고 스스로 바꿔 낀다(src-tauri/src/update.rs).
+# 손으로 돌리면(workflow_dispatch) 굽기만 하고 릴리스는 만들지 않는다 — 결과물은 그 실행의 Artifacts 에 남는다.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: 판 번호 확인
+        shell: bash
+        run: node scripts/version.mjs --check "$GITHUB_REF_TYPE" "$GITHUB_REF_NAME"
+      - name: 단위 검증
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      # 설치 프로그램(NSIS)과 그 서명(.sig)이 같이 나온다. 앱은 업데이트 때 이 설치 프로그램을 받아 조용히 돌린다.
+      - name: 굽기
+        run: npx tauri build --bundles nsis
+        env:
+          HACHIBONGO_RELEASE: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: 모으기
+        shell: bash
+        run: |
+          set -euo pipefail
+          v="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          src="src-tauri/target/release/bundle/nsis/hachibongo_${v}_x64-setup.exe"
+          mkdir out
+          cp "$src" "out/hachibongo-${v}-windows-setup.exe"
+          cp "$src.sig" "out/hachibongo-${v}-windows-setup.exe.sig"
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hachibongo-windows
+          path: out/
+          retention-days: 30
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: 판 번호 확인
+        run: node scripts/version.mjs --check "$GITHUB_REF_TYPE" "$GITHUB_REF_NAME"
+      - name: 단위 검증
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      # 인텔·애플 실리콘 맥 둘 다 열리게 한 파일로 굽는다
+      - name: 굽기
+        run: npx tauri build --target universal-apple-darwin --bundles app
+        env:
+          HACHIBONGO_RELEASE: "1"
+      # 임시(ad-hoc) 서명은 구울 때마다 서명이 바뀌어서, 업데이트할 때마다 맥이 '입력 모니터링' 허락을 잊는다.
+      # 늘 같은 자체 인증서로 서명하면 허락이 판을 넘어 남는다. 애플 공증은 아니라 처음 열 때 한 번 막히는 건 그대로다.
+      - name: 서명
+        env:
+          MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          kc="$RUNNER_TEMP/sign.keychain-db"
+          kpw="$(openssl rand -hex 16)"
+          echo "$MAC_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$kpw" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$kpw" "$kc"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kpw" "$kc" > /dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          security find-certificate -c hachibongo -p "$kc" > "$RUNNER_TEMP/cert.pem"
+          # 스스로 만든 인증서라 믿음을 얹어 둔다. 러너가 막으면 믿지 않은 신원 그대로 지문으로 서명해 본다.
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cert.pem" || echo "믿음 얹기 실패"
+          security find-identity -p codesigning "$kc"
+          id="$(security find-identity -p codesigning "$kc" | awk '/hachibongo/ {print $2; exit}')"
+          test -n "$id"
+          app=src-tauri/target/universal-apple-darwin/release/bundle/macos/hachibongo.app
+          codesign --force --timestamp=none --keychain "$kc" -s "$id" "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -d -r- "$app" 2>&1 | tee "$RUNNER_TEMP/req.txt"
+          grep -q 'certificate leaf' "$RUNNER_TEMP/req.txt"
+      # 업데이트 묶음과 dmg 는 서명한 앱으로 만들어야 하므로 tauri 에 맡기지 않고 여기서 싼다.
+      # dmg 는 앱과 응용 프로그램 폴더 바로 가기를 나란히 둬서 끌어다 놓으면 깔리게 한다.
+      - name: 묶기
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          v="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          app=src-tauri/target/universal-apple-darwin/release/bundle/macos/hachibongo.app
+          mkdir out
+          COPYFILE_DISABLE=1 tar -czf "out/hachibongo-${v}-mac-update.tar.gz" -C "$(dirname "$app")" hachibongo.app
+          npx tauri signer sign "out/hachibongo-${v}-mac-update.tar.gz"
+          stage="$RUNNER_TEMP/dmg"
+          mkdir "$stage"
+          ditto "$app" "$stage/hachibongo.app"
+          ln -s /Applications "$stage/Applications"
+          # 러너에서 hdiutil 이 가끔 '자원 사용 중' 으로 실패해서 몇 번 다시 해 본다
+          for i in 1 2 3; do
+            hdiutil create -volname hachibongo -srcfolder "$stage" -ov -format UDZO "out/hachibongo-${v}-mac.dmg" && break
+            sleep 5
+          done
+          test -f "out/hachibongo-${v}-mac.dmg"
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hachibongo-mac
+          path: out/
+          retention-days: 30
+
+  publish:
+    needs: [windows, mac]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      # 서명은 latest.json 안에 넣으므로 .sig 파일은 릴리스에 안 올린다. 받는 사람 눈에 파일이 적을수록 덜 헷갈린다.
+      - name: 릴리스
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          v="${GITHUB_REF_NAME#v}"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          win="hachibongo-${v}-windows-setup.exe"
+          mac="hachibongo-${v}-mac-update.tar.gz"
+          dmg="hachibongo-${v}-mac.dmg"
+          jq -n --arg v "$v" --arg wu "$url/$win" --arg ws "$(cat "out/$win.sig")" --arg mu "$url/$mac" --arg ms "$(cat "out/$mac.sig")" \
+            '{version: $v, notes: "", pub_date: (now | todate), platforms: {
+               "windows-x86_64": {url: $wu, signature: $ws},
+               "darwin-aarch64": {url: $mu, signature: $ms},
+               "darwin-x86_64": {url: $mu, signature: $ms}}}' > out/latest.json
+          sed "s/{{v}}/$v/g" .github/release-notes.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --title "hachibongo $v" --notes-file notes.md \
+            "out/$win" "out/$dmg" "out/$mac" out/latest.json

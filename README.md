@@ -57,6 +57,31 @@
 > 하치와레·치이카와·우사기는 나가노(ちいかわ)의 캐릭터이고 그림의 권리는 원작자에게 있다.
 > 이 저장소는 비상업 팬 제작물이다. 판매하거나 수익을 내지 않으며, 권리자가 요청하면 내린다.
 
+## 설치와 업데이트
+
+[릴리스](https://github.com/sehyun04/hachibongo/releases/latest)에서 Windows 는 `…-windows-setup.exe`, 맥은 `…-mac.dmg` 를 받는다.
+받는 사람용 안내는 릴리스 본문(`.github/release-notes.md`)에 있다.
+
+- Windows: 설치 파일을 돌리면 `%LOCALAPPDATA%\hachibongo` 에 깔리고 시작 메뉴·바탕화면에 바로 가기가 생긴다. 관리자 권한은 필요 없다.
+  코드 서명을 안 해서 처음엔 'Windows의 PC 보호' 창이 뜬다 — '추가 정보' → '실행'.
+- 맥: dmg 를 열어 앱을 Applications 로 끌어다 놓는다. 애플 공증을 안 받아서 처음 열 때 한 번 막힌다(아래 '맥에서').
+- 그 뒤로는 앱이 알아서 새 판으로 바꾼다. 켜고 20초 뒤와 6시간마다 맨 마지막 릴리스의 `latest.json` 을 보고, 새 판이면 받아서
+  바꿔 끼우고 다시 켠다(Windows 는 설치 진행 창이 1초쯤 떴다 사라진다). 트레이 메뉴 아래쪽 '업데이트 확인 (판)' 으로 바로 물을 수도 있다.
+- CI 가 구운 판(`HACHIBONGO_RELEASE`)만 업데이트한다. 직접 구운 판은 메뉴에 '직접 구운 판' 으로 나오고 그대로 있다 —
+  안 그러면 개발하며 띄운 exe 가 릴리스 판을 깔고 꺼져 버린다.
+
+### 새 판 내보내기
+
+`node scripts/version.mjs 0.2.1` 로 판 번호를 올리고(다섯 군데를 같이 바꾼다) 커밋한 뒤 `v0.2.1` 태그를 올린다.
+Actions 의 `release` 가 윈도우·맥 판을 굽고 서명해서 릴리스를 만들고, 그 순간부터 깔린 앱들이 받아 간다.
+
+서명 열쇠와 인증서는 저장소 밖(`~/.tauri/`)과 저장소 Secrets 에 있다.
+
+| Secret | 쓰는 곳 |
+|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY`·`_PASSWORD` | 업데이트 파일 서명. 앱은 `tauri.conf.json` 의 공개 열쇠로 확인한다. 잃으면 깔린 앱들이 새 판을 못 믿으니 한 번씩 새로 깔아야 한다 |
+| `MAC_CERT_P12`·`MAC_CERT_PASSWORD` | 맥판 서명용 자체 인증서. 바뀌면 맥이 입력 모니터링 허락을 다시 묻는다 |
+
 ## 빌드·실행
 
 Windows 와 macOS(10.15 이상)에서 돈다. Node.js 와 Rust 가 있어야 한다.
@@ -69,16 +94,16 @@ npm run dev            # 디버그 실행
 
 ### 맥에서
 
-맥판은 GitHub Actions 의 `mac` 이 굽는다(main 에 앱 코드가 바뀌어 올라가면 저절로, Actions 탭에서 손으로도). 그 실행의 Artifacts 에서
-`hachibongo-mac` 을 받아 풀면 `hachibongo.app` 이다. 인텔·애플 실리콘 둘 다 열린다. 직접 구울 때는 맥에서 `npm install` 뒤
-`npx tauri build --bundles app`.
+맥판은 GitHub Actions 의 `release` 가 굽는다(태그를 올리면 저절로, Actions 탭에서 손으로도 — 손으로 돌리면 릴리스는 안 만들고
+그 실행의 Artifacts 에만 남긴다). 인텔·애플 실리콘 둘 다 열린다. 직접 구울 때는 맥에서 `npm install` 뒤 `npx tauri build --bundles app`.
 
-- 임시 서명이라 처음 열 때 막힌다. 응용 프로그램으로 옮긴 뒤 터미널에서 `xattr -dr com.apple.quarantine /Applications/hachibongo.app`.
+- 애플 공증을 받지 않아서 처음 열 때 막힌다. 응용 프로그램으로 옮긴 뒤 터미널에서 `xattr -dr com.apple.quarantine /Applications/hachibongo.app`.
   터미널을 안 쓰면 한 번 열어 막힌 다음 시스템 설정 → 개인정보 보호 및 보안 맨 아래의 '그래도 열기'.
   오른쪽 클릭 → 열기는 맥OS 14 까지만 된다.
 - 처음 켜면 **입력 모니터링** 허락을 묻는다(시스템 설정 → 개인정보 보호 및 보안). 허락하면 다시 켜지 않아도 몇 초 안에 키를 받는다.
   그래도 안 붙으면 **손쉬운 사용** 허락을 한 번 더 묻는다. 허락 전에도 커서 따라가기는 된다.
-- 새로 구운 판으로 바꾸면 맥이 다른 앱으로 보고 허락을 다시 묻는다(임시 서명이라서).
+- CI 는 늘 같은 자체 인증서로 서명하므로 업데이트해도 허락이 남는다. 임시 서명이던 0.1 판에서 넘어올 때만 한 번 다시 허락해야 한다 —
+  목록에 hachibongo 가 켜져 있는데도 키를 못 받으면 그 줄을 빼고(-) 다시 허락한다. 직접 구운 판(임시 서명)도 다른 앱으로 보고 다시 묻는다.
 - 독에는 안 뜨고 메뉴 막대 아이콘만 있다. 비밀번호 칸처럼 보안 입력이 켜진 동안은 맥이 키를 보여 주지 않는다.
 
 그림만 볼 때는 `src/index.html` 을 아무 정적 서버로 열면 된다. Tauri 밖에서는 혼자 움직이는
@@ -99,8 +124,10 @@ npm run dev            # 디버그 실행
 | `src-tauri/src/input/` | 전역 키보드·마우스 입력과 커서 60Hz 폴링. `win.rs`(저수준 훅)·`mac.rs`(듣기만 하는 CGEventTap, 맥 키 번호를 Windows 가상 키 번호로) |
 | `src-tauri/src/main.rs` | 투명 창, 트레이 메뉴, 캐릭터·위치·크기 저장 |
 | `src-tauri/src/together.rs` | 같이 하기 메뉴, 방 코드(난수·클립보드), 상대 창 띄우고 닫기 |
+| `src-tauri/src/update.rs` | 자체 업데이트 — 새 판 묻기·받기·바꿔 끼우기, 트레이의 '업데이트 확인' |
 | `relay/` | 같이 하기 중계(Cloudflare Worker + Durable Object)와 그 검증(`test.mjs`) |
-| `.github/workflows/mac.yml` | 맥판 굽기 |
+| `.github/workflows/release.yml` | 태그를 올리면 윈도우 설치 파일·맥 dmg 를 굽고 서명해서 릴리스로 낸다. 릴리스 본문은 `.github/release-notes.md` |
+| `scripts/version.mjs` | 판 번호를 다섯 군데 같이 바꾸고, CI 에서 태그와 맞는지 본다 |
 | `scripts/measure-chars.py` | 치이스페 그림에서 캐릭터 자리를 재서 `src/chars.js` 를 만든다 |
 
 ## 알아 둘 것
@@ -109,6 +136,7 @@ npm run dev            # 디버그 실행
 - 키를 누른 채 관리자 창·잠금 화면·보안 입력 칸으로 가서 떼는 신호를 놓치면, 1.5초 뒤 실제 키 상태와 대조해 발을 뗀다.
 - 어떤 키를 눌렀는지는 발 위치를 고르는 데만 쓰고 저장하지 않는다.
   `HACHIBONGO_LOG=<파일>` 을 주면 5초마다 입력 개수(키·클릭·휠·커서)만 적는다. 갈고리가 살아 있는지 볼 때 쓴다.
+  업데이트를 묻고 받은 결과(`update: …`)도 여기 적힌다.
 - `HACHIBONGO_CONFIG=<파일>` 로 설정 파일 경로를 바꿀 수 있다. 같은 설정 파일로는 하나만 뜬다(Windows). 두 번 켜도 두 번째는 바로 나간다.
 - 설정 파일 옆에 `settings.quit` 같은 `.quit` 파일을 만들면 메뉴의 종료처럼 곱게 꺼진다. 프로세스를 강제로 끄면
   트레이 아이콘이 마우스가 지나갈 때까지 남으므로, 검증하거나 새 빌드로 바꿔 띄울 때는 이걸로 끈다.

@@ -4,6 +4,7 @@ mod input;
 mod settings;
 mod single;
 mod together;
+mod update;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -35,6 +36,7 @@ struct Shared {
     peer_char: Mutex<Option<String>>,
     /// 상대 창 띄우기·닫기를 한 줄로 세운다. 안의 값은 마지막으로 따른 요청 번호.
     peer_gate: tauri::async_runtime::Mutex<u64>,
+    update: update::State,
 }
 
 impl Shared {
@@ -185,6 +187,8 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
             let _ = win.set_position(p);
         }
         together::reset_peer(app, &shared);
+    } else if id == "update" {
+        update::check(app);
     } else if id == "quit" {
         shared.save_now();
         app.exit(0);
@@ -193,6 +197,7 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![ready, together::peer, together::together_status])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -232,7 +237,8 @@ fn main() {
             let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
             let (together_menu, together) = together::build(app, &s)?;
-            let menu = Menu::with_items(app, &[&char_menu, &size_menu, &together_menu, &pass_item, &reset, &sep, &quit])?;
+            let update = update::build(app)?;
+            let menu = Menu::with_items(app, &[&char_menu, &size_menu, &together_menu, &pass_item, &reset, &sep, update.item(), &quit])?;
 
             let look = Look::of(&s);
             let saved = s.x.zip(s.y);
@@ -246,6 +252,7 @@ fn main() {
                 together,
                 peer_char: Mutex::new(None),
                 peer_gate: tauri::async_runtime::Mutex::new(0),
+                update,
             });
             app.manage(shared.clone());
             {
@@ -294,6 +301,7 @@ fn main() {
             }
 
             input::MAIN.attach(&win);
+            update::start(&handle);
             input::start(handle);
             win.show()?;
             Ok(())

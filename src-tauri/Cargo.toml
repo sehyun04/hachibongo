@@ -1,6 +1,6 @@
 [package]
 name = "hachibongo"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "키보드·마우스 입력을 따라 치는 하치와레 오버레이"
 
@@ -19,6 +19,9 @@ serde_json = "1"
 # 같이 하기 방 코드: 난수와 클립보드(카톡으로 코드를 주고받는다)
 getrandom = "0.3"
 arboard = { version = "3", default-features = false }
+# 자체 업데이트. 받는 곳·열쇠는 src/update.rs. TLS 는 운영체제 것을 쓴다 - 기본(rustls)은 ring 을 C 로 굽느라
+# 이 PC 에서 맥 타입 검사가 안 되고 실행 파일도 커진다. 설치 파일을 zip 에 싸 보내지 않으니 zip 도 뺀다.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
