@@ -661,16 +661,78 @@ function frame(t) {
   raf = settled ? 0 : requestAnimationFrame(frame);
 }
 
+// ---------------------------------------------------------------- 이름표
+
+// 이름표 자리. 그림이 창 위끝까지 차 있어서 창을 이만큼 위로 늘렸다(main.rs 의 TAG_ROOM 과 같아야 한다).
+// 몸이 4도까지 기울면 긴 이름의 구름 끝이 그만큼 더 올라가서, 그때도 안 잘릴 만큼 둔다.
+const TAG_ROOM = 26;
+// 머리 오른쪽 위(1시 쪽)에 뜨는 구름의 가운데와, 이름이 길 때 구름 오른쪽 끝이 넘지 않을 자리.
+// 캐릭터마다 귀 모양이 달라 눈으로 맞췄다 — 하치와레·치이카와는 오른쪽 귀 위라서 졸 때 뜨는 Z(#zzz) 앞에서 멈추고
+// 왼쪽(머리 위)으로 늘어난다. 귀가 긴 우사기는 귀 오른편이라 Z 보다 높아서 귀를 덮지 않게 오른쪽으로 늘어난다.
+const TAG_AT = { hachiware: [250, 2, 298], chiikawa: [248, 4, 300], usagi: [266, -26, 386] };
+// 구름 몸통 높이와 글자 양옆 여백, 위아래로 부푼 뭉게 크기. 머리보다 눈에 띄지 않게 작다.
+const TAG = { h: 18, pad: 6, top: 8, bottom: 5.5 };
+let tagName = '';
+let tagOn = true;
+
+/** 줄바꿈·제어 문자를 빼고 열 글자까지(nametag.rs 의 clean 과 같다). 상대가 보낸 이름도 여기를 거친다. */
+const cleanName = (s) =>
+  Array.from(String(s ?? '').replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, 10).join('');
+
+/**
+ * 구름을 이루는 동그라미들: 양 끝 반원, 위로 부푼 뭉게, 아래 작은 뭉게, 머리 쪽으로 떨어지는 방울 둘.
+ * 방울은 구름 왼쪽 아래에 달되, 긴 이름으로 구름이 왼쪽으로 늘어나도 맞춘 자리(dropX) 밖으로는 안 간다 — 반대쪽 귀 위로 떨어지지 않게.
+ */
+function cloudOf(x, y, w, dropX) {
+  const { h, top, bottom } = TAG;
+  const r = h / 2;
+  const span = w - h;
+  // 짧은 이름도 위로 두 번은 부풀어야 구름으로 보인다
+  const n = Math.max(2, Math.round(span / 11));
+  const c = [[x + r, y + r, r], [x + w - r, y + r, r]];
+  for (let i = 0; i < n; i++) c.push([x + r + ((i + 0.5) / n) * span, y + 1.5, top + (i % 2) * 1.4]);
+  for (let i = 0; i < n; i++) c.push([x + r + ((i + 0.5) / n) * span, y + h - 0.5, bottom]);
+  const d = Math.max(x + 3, dropX);
+  c.push([d, y + h + 6, 3], [d - 6, y + h + 12, 2]);
+  return c;
+}
+
+// 몸(#body) 안에 있어서 몸이 기울면 같이 기운다. 클릭은 받지 않는다(style.css) — 이름표 위는 뒤 창을 눌러야 한다.
+// 테는 동그라미마다 굵게 그은 뒤 그 위를 같은 동그라미로 칠해 덮는다. 겹친 안쪽 테는 가려지고 바깥 테두리만 남는다.
+function drawTag() {
+  const show = tagOn && tagName !== '';
+  $('tag').style.display = show ? '' : 'none';
+  if (!show) return;
+  const text = $('tagText');
+  text.textContent = tagName;
+  const { h, pad } = TAG;
+  const w = Math.max(h + 10, text.getComputedTextLength() + pad * 2);
+  const [ax, ay, right] = TAG_AT[document.documentElement.dataset.char] ?? TAG_AT.hachiware;
+  const x = n2(Math.min(ax - w / 2, right - w)), y = n2(ay - h / 2);
+  const parts = cloudOf(x, y, w, ax - 19).map(([cx, cy, r]) => `<circle cx="${n2(cx)}" cy="${n2(cy)}" r="${n2(r)}"/>`).join('')
+    + `<rect x="${x + h / 2}" y="${y}" width="${n2(w - h)}" height="${h}"/>`;
+  $('tagLine').innerHTML = parts;
+  $('tagFill').innerHTML = parts;
+  setAttrs(text, { x: n2(x + w / 2), y: n2(y + h / 2 + 0.5) });
+}
+
+function setTag(name, on = tagOn) {
+  tagName = cleanName(name);
+  tagOn = !!on;
+  drawTag();
+}
+
 // ---------------------------------------------------------------- 캐릭터
 
 // 캐릭터마다 다른 것은 그림과 그 그림에서 잰 자리(chars.js)뿐이다. 그림을 팔이 몸에서 나오는 자리가 하치와레와
 // 같은 곳에 오게 앉혀 두어서 키보드·발·마우스·몸 기울기 계산은 셋이 같이 쓴다.
 // 창 아래 끝(책상 앞)은 274 로 고정이고, 귀가 긴 캐릭터는 창이 위로 늘어난다(main.rs 의 CHARS 높이와 같다).
+// 그 위로 이름표 자리(TAG_ROOM)가 더 붙는다.
 function setChar(key) {
   if (!Object.hasOwn(CHARS, key)) key = 'hachiware';
   C = CHARS[key];
   document.documentElement.dataset.char = key;
-  svg.setAttribute('viewBox', `72 ${C.top} 320 ${274 - C.top}`);
+  svg.setAttribute('viewBox', `72 ${C.top - TAG_ROOM} 320 ${274 - C.top + TAG_ROOM}`);
   const st = document.documentElement.style;
   st.setProperty('--skin', C.skin);
   st.setProperty('--line', C.line);
@@ -688,15 +750,18 @@ function setChar(key) {
   $('burst').innerHTML = BURST[key] ? BURST[key](C) : '';
   $('tail').style.display = C.tail ? '' : 'none';
   $('zzz').setAttribute('transform', `translate(${C.z} 0)`);
+  drawTag();
   kick();
 }
 
 // ---------------------------------------------------------------- 시작
 
-window.hachi = { handle, setChar, fromPeer, releasePeer };
+window.hachi = { handle, setChar, setTag, fromPeer, releasePeer };
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 const params = new URLSearchParams(location.search);
 setChar(PEER ? HACHI.char : params.get('char'));
+// 브라우저로 열어 모양을 볼 때는 ?name= 으로 이름표를 띄운다
+if (!T) setTag(params.get('name'));
 blinkLoop();
 swishLoop();
 active();
@@ -714,7 +779,18 @@ if (T && PEER) {
     locked = payload;
     ignoring = true;
   });
-  T.core.invoke('ready').then((s) => { locked = s.passthrough; }).catch(() => {});
+  // 상대 이름은 창이 뜨기 전에 와 있을 수 있어서 Rust 가 들고 있다가 ready 로 준다. 듣기를 먼저 걸어야
+  // ready 와 그 뒤 바뀐 이름 사이에 빈틈이 없다.
+  Promise.all([
+    on('name', ({ payload }) => setTag(payload)),
+    on('tag', ({ payload }) => setTag(tagName, payload)),
+  ])
+    .then(() => T.core.invoke('ready'))
+    .then((s) => {
+      locked = s.passthrough;
+      setTag(s.peer_name, s.nametag);
+    })
+    .catch(() => {});
   setInterval(() => releasePeer(4000), 1000);
 } else if (T) {
   // 저장된 캐릭터를 받기 전에 하치와레가 한 번 비쳤다가 바뀌지 않게 가려 둔다.
@@ -738,10 +814,16 @@ if (T && PEER) {
     together.hello();
   });
   on('room', ({ payload }) => together.join(payload));
+  on('name', ({ payload }) => {
+    setTag(payload);
+    together.hello();
+  });
+  on('tag', ({ payload }) => setTag(tagName, payload));
   T.core.invoke('ready')
     .then((s) => {
       locked = s.passthrough;
       setChar(s.character);
+      setTag(s.name, s.nametag);
       together.start(s);
     })
     .catch(() => {})

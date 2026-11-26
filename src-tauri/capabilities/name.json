@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "name",
+  "description": "이름표 이름 바꾸는 작은 창 - 취소·Esc 로 스스로 닫는 것만 더 연다",
+  "windows": ["name"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close"
+  ]
+}

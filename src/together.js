@@ -3,7 +3,7 @@
 // 같이 하기 — 두 사람의 하치봉고를 중계(relay/)로 잇는다. 메인 창에서만 돈다(상대 창은 main.js 의 fromPeer 로 받기만 한다).
 // 방 코드·트레이 메뉴·상대 창 띄우기는 Rust(together.rs)가 하고, 여기서는 중계와 줄을 주고받는다.
 //
-// 보내는 것은 어느 발로 쳤는지(L·R)와 박자, 마우스 위치(화면 안 비율)·클릭·휠, 내 캐릭터뿐이다. 어떤 키였는지는 보내지 않는다 —
+// 보내는 것은 어느 발로 쳤는지(L·R)와 박자, 마우스 위치(화면 안 비율)·클릭·휠, 내 캐릭터와 이름표 이름뿐이다. 어떤 키였는지는 보내지 않는다 —
 // 보내면 상대 화면이 곧 내 키로거가 된다. 받는 쪽은 그 발 쪽 키 하나를 아무거나 골라 친다.
 const together = (() => {
   const RELAY = 'wss://hachibongo-relay.ds187.workers.dev';
@@ -20,6 +20,7 @@ const together = (() => {
   let room = null;
   let ws = null;
   let peer = null;
+  let peerName = null;
   let retry = 0;
   let retryTimer = 0;
   let heardAt = 0;
@@ -39,7 +40,7 @@ const together = (() => {
   }
 
   function hello() {
-    send({ t: 'hello', c: document.documentElement.dataset.char || 'hachiware' });
+    send({ t: 'hello', c: document.documentElement.dataset.char || 'hachiware', n: tagName });
   }
 
   // 상대 창 띄우기·닫기는 Rust 에서 따로따로 돌아서, 닫기 바로 뒤의 띄우기가 먼저 끝나면 창이 사라진 채 남았다.
@@ -59,6 +60,7 @@ const together = (() => {
   function peerGone() {
     if (peer === null) return;
     peer = null;
+    peerName = null;
     T.core.invoke('peer', { character: null, seq: nextSeq() }).catch(() => {});
   }
 
@@ -121,7 +123,13 @@ const together = (() => {
         // 처음 만난 상대에게는 내 캐릭터도 다시 알린다. 들어왔다는 알림(join)에 답한 인사가 길에서 사라지면
         // 상대는 내 캐릭터를 모른 채 다시 접속할 때까지 빈손으로 남는다.
         if (first) hello();
-        status(`같이 하는 중 · 상대는 ${nameOf(m.c)}`);
+        // 이름은 인사마다 실려 온다(상대가 이름을 바꾸면 인사를 다시 보낸다). 옛 판은 이름 없이 온다.
+        const n = cleanName(m.n);
+        if (n !== peerName) {
+          peerName = n;
+          T.core.invoke('peer_name', { name: n || null }).catch(() => {});
+        }
+        status(`같이 하는 중 · 상대는 ${n ? `${n}(${nameOf(m.c)})` : nameOf(m.c)}`);
         break;
       }
       default:

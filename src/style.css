@@ -95,6 +95,20 @@ html, body {
 .tail-o { stroke: var(--ink); stroke-width: 27; }
 .tail-b { stroke: var(--cap); stroke-width: 17.4; }
 
+/* 머리 오른쪽 위 구름 이름표: 캐릭터 색 구름에 그림과 같은 검은 테. 머리보다 작게.
+   테 층은 두께의 절반이 칠 층에 덮이므로 보이는 테(1.6)의 두 배로 긋는다. */
+#tag { pointer-events: none; --tag: #c9e1ee; }
+:root[data-char="chiikawa"] #tag { --tag: #fdd3dd; }
+:root[data-char="usagi"] #tag { --tag: #f9e4a4; }
+#tagLine { fill: var(--ink); stroke: var(--ink); stroke-width: 3.2; }
+#tagFill { fill: var(--tag); }
+#tagText {
+  font: 700 13px "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  fill: var(--ink);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
 /* 누를 때 튀는 짧은 효과선. 만화 쪽 표현이라 링보다 원작 결에 가깝다. */
 #fx, #zzz, #eyesClosed, #mouthClosed, #burst { pointer-events: none; }
 .tap { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; animation: tap 0.26s ease-out forwards; }

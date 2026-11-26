@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>이름표</title>
+<style>
+  /* 오버레이 그림과 같은 책상색 바탕, 하치와레 귀 파랑. 보라는 쓰지 않는다. */
+  :root {
+    --ink: #000000;
+    --desk: #fbf4ea;
+    --cap: #86b5cf;
+    --pad: #e2eef4;
+    --muted: #8a7a66;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--desk);
+    color: #1f1a14;
+    font: 14px "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  form {
+    box-sizing: border-box;
+    height: 100%;
+    padding: 18px 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  /* 머리 위에 뜰 모양 그대로 미리 본다 */
+  .preview { display: flex; justify-content: center; padding-bottom: 4px; }
+  .tag {
+    position: relative;
+    min-width: 18px;
+    padding: 1px 9px;
+    border: 1.6px solid var(--ink);
+    border-radius: 999px;
+    background: var(--pad);
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 18px;
+    text-align: center;
+    white-space: pre;
+  }
+  .tag::before, .tag::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-bottom: 0;
+  }
+  .tag::before { top: 100%; border-top: 5px solid var(--ink); margin-top: 0.4px; }
+  .tag::after { top: 100%; border-top: 3.6px solid var(--pad); border-width: 3.6px 3.6px 0; margin-top: -0.4px; }
+  input {
+    font: inherit;
+    padding: 8px 11px;
+    border: 1.6px solid var(--ink);
+    border-radius: 10px;
+    background: #fff;
+    outline: none;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  input:focus { box-shadow: 0 0 0 3px rgba(134, 181, 207, 0.45); }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .hint { flex: 1; color: var(--muted); font-size: 12px; }
+  button {
+    font: inherit;
+    font-weight: 700;
+    padding: 5px 14px;
+    border: 1.6px solid var(--ink);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  button.ok { background: var(--cap); }
+  button:active { transform: translateY(1px); }
+</style>
+</head>
+<body>
+<form id="f">
+  <div class="preview"><div class="tag" id="tag">&nbsp;</div></div>
+  <input id="n" maxlength="10" placeholder="머리 위에 띄울 이름" autocomplete="off" spellcheck="false" autofocus>
+  <div class="row">
+    <span class="hint">비우면 컴퓨터 이름으로</span>
+    <button type="button" id="cancel">취소</button>
+    <button type="submit" class="ok">저장</button>
+  </div>
+</form>
+<script>
+'use strict';
+// 트레이 '이름표 → 이름 바꾸기' 로 뜨는 창. 저장하면 Rust(nametag.rs 의 set_name)가 다듬어 저장하고 이 창을 닫는다.
+const T = window.__TAURI__;
+const input = document.getElementById('n');
+const tag = document.getElementById('tag');
+const preview = () => { tag.textContent = input.value.trim() || ' '; };
+input.addEventListener('input', preview);
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+const close = () => T.window.getCurrentWindow().close().catch(() => {});
+document.getElementById('cancel').addEventListener('click', close);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+document.getElementById('f').addEventListener('submit', (e) => {
+  e.preventDefault();
+  T.core.invoke('set_name', { name: input.value }).catch(close);
+});
+T.core.invoke('ready').then((s) => {
+  input.value = s.name;
+  preview();
+  input.select();
+}).catch(() => {});
+</script>
+</body>
+</html>

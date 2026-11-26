@@ -19,6 +19,12 @@ pub struct Settings {
     pub relay: Option<String>,
     pub peer_x: Option<i32>,
     pub peer_y: Option<i32>,
+    /// 머리 위 이름표에 띄울 이름. 비면 컴퓨터 계정 이름(nametag.rs).
+    pub name: Option<String>,
+    /// 이름표 보이기. 끄면 내 것과 상대 것을 같이 숨긴다.
+    pub nametag: bool,
+    /// 저장된 자리가 이름표 자리만큼 창이 위로 늘어난 뒤의 것인지. 그 전 판의 자리는 켤 때 한 번 올려 준다.
+    pub tag_room: bool,
 }
 
 impl Default for Settings {
@@ -34,6 +40,9 @@ impl Default for Settings {
             relay: None,
             peer_x: None,
             peer_y: None,
+            name: None,
+            nametag: true,
+            tag_room: false,
         }
     }
 }

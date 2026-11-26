@@ -226,6 +226,7 @@ pub async fn peer(app: AppHandle, character: Option<String>, seq: u64) -> Result
 
 pub fn close_peer(app: &AppHandle, shared: &Shared) {
     shared.peer_char.lock().unwrap().take();
+    shared.peer_name.lock().unwrap().take();
     if let Some(w) = app.get_webview_window("peer") {
         input::PEER.detach();
         let _ = w.destroy();

@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod input;
+mod nametag;
 mod settings;
 mod single;
 mod together;
@@ -23,6 +24,9 @@ const SIZES: [(&str, &str, f64); 3] = [("s", "작게", 0.7), ("m", "보통", 0.9
 // 캐릭터와 그 viewBox 높이. 우사기는 귀가 길어 창이 위로 56 늘어난다.
 // 높이는 scripts/measure-chars.py 가 알려 주는 값(274 - chars.js 의 top)과 같아야 한다.
 const CHARS: [(&str, &str, f64); 3] = [("hachiware", "하치와레", 274.0), ("chiikawa", "치이카와", 274.0), ("usagi", "우사기", 330.0)];
+// 이름표 구름 자리. 그림이 창 위끝까지 차 있어서 창을 이만큼 위로 늘린다(main.js 의 TAG_ROOM 과 같아야 한다).
+// 이름표를 꺼도 줄이지 않는다 — 켜고 끌 때마다 창이 들썩이지 않게.
+const TAG_ROOM: f64 = 26.0;
 
 struct Shared {
     path: PathBuf,
@@ -37,6 +41,9 @@ struct Shared {
     /// 상대 창 띄우기·닫기를 한 줄로 세운다. 안의 값은 마지막으로 따른 요청 번호.
     peer_gate: tauri::async_runtime::Mutex<u64>,
     update: update::State,
+    nametag: nametag::Menu,
+    /// 같이 하기 상대의 이름표. 상대 창이 뜰 때 `ready` 로 가져간다.
+    peer_name: Mutex<Option<String>>,
 }
 
 impl Shared {
@@ -54,6 +61,9 @@ struct Ready {
     room: Option<String>,
     client: Option<String>,
     relay: Option<String>,
+    name: String,
+    nametag: bool,
+    peer_name: Option<String>,
 }
 
 #[tauri::command]
@@ -65,6 +75,9 @@ fn ready(shared: tauri::State<'_, Arc<Shared>>) -> Ready {
         room: s.room.clone(),
         client: s.client.clone(),
         relay: s.relay.clone(),
+        name: nametag::of(&s),
+        nametag: s.nametag,
+        peer_name: shared.peer_name.lock().unwrap().clone(),
     }
 }
 
@@ -84,7 +97,7 @@ impl Look {
     }
 
     fn base_h(&self) -> f64 {
-        CHARS.iter().find(|c| c.0 == self.character).map(|c| c.2).unwrap_or(CHARS[0].2)
+        CHARS.iter().find(|c| c.0 == self.character).map(|c| c.2).unwrap_or(CHARS[0].2) + TAG_ROOM
     }
 
     fn logical(&self) -> LogicalSize<f64> {
@@ -162,6 +175,8 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
     let look = Look::of(&shared.settings.lock().unwrap());
     if id.starts_with("together:") {
         together::on_menu(app, &shared, id);
+    } else if id.starts_with("tag:") {
+        nametag::on_menu(app, &shared, id);
     } else if let Some(key) = id.strip_prefix("size:") {
         relayout(app, &win, &shared, &Look { size: key.to_string(), ..look });
     } else if let Some(key) = id.strip_prefix("char:") {
@@ -198,7 +213,13 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![ready, together::peer, together::together_status])
+        .invoke_handler(tauri::generate_handler![
+            ready,
+            together::peer,
+            together::together_status,
+            nametag::set_name,
+            nametag::peer_name
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
             let path = settings::path(&handle);
@@ -213,6 +234,14 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             if s.client.is_none() {
                 s.client = Some(together::client_id());
+                s.save(&path);
+            }
+            // 이름표 자리만큼 창이 위로 늘어났다. 예전 자리를 그대로 쓰면 책상이 그만큼 내려앉으므로 한 번 올려 준다.
+            if !s.tag_room {
+                let dy = (TAG_ROOM * Look::of(&s).scale() * win.scale_factor().unwrap_or(1.0)).round() as i32;
+                s.y = s.y.map(|y| y - dy);
+                s.peer_y = s.peer_y.map(|y| y - dy);
+                s.tag_room = true;
                 s.save(&path);
             }
 
@@ -237,8 +266,12 @@ fn main() {
             let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
             let (together_menu, together) = together::build(app, &s)?;
+            let (tag_menu, tag) = nametag::build(app, &s)?;
             let update = update::build(app)?;
-            let menu = Menu::with_items(app, &[&char_menu, &size_menu, &together_menu, &pass_item, &reset, &sep, update.item(), &quit])?;
+            let menu = Menu::with_items(
+                app,
+                &[&char_menu, &size_menu, &tag_menu, &together_menu, &pass_item, &reset, &sep, update.item(), &quit],
+            )?;
 
             let look = Look::of(&s);
             let saved = s.x.zip(s.y);
@@ -253,6 +286,8 @@ fn main() {
                 peer_char: Mutex::new(None),
                 peer_gate: tauri::async_runtime::Mutex::new(0),
                 update,
+                nametag: tag,
+                peer_name: Mutex::new(None),
             });
             app.manage(shared.clone());
             {

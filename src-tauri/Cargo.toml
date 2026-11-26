@@ -1,6 +1,6 @@
 [package]
 name = "hachibongo"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "키보드·마우스 입력을 따라 치는 하치와레 오버레이"
 
