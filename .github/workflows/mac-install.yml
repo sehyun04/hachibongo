@@ -1,0 +1,32 @@
+# 맥 한 줄 설치(scripts/install-mac.sh)를 실제 맥에서 돌려, 격리 표시 없이 깔리고 막힘 없이 켜지는지 본다.
+# 이 PC(Windows)에서는 맥을 못 돌리므로 여기서 확인한다. 릴리스가 끝나면 저절로, Actions 탭에서 손으로도 돌린다.
+name: mac-install
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    # 릴리스는 태그로 돌 때만 만들어진다. 손으로 굽기만 한 실행 뒤에는 확인할 새 릴리스가 없다.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: macos-latest
+    steps:
+      - name: 한 줄 설치
+        run: curl -fsSL https://github.com/sehyun04/hachibongo/releases/latest/download/install-mac.sh | sh
+      - name: 확인
+        run: |
+          set -eu
+          app=/Applications/hachibongo.app
+          defaults read "$app/Contents/Info.plist" CFBundleShortVersionString
+          if xattr -p com.apple.quarantine "$app" 2>/dev/null; then echo "격리 표시가 남아 처음 열 때 막힌다"; exit 1; fi
+          codesign --verify --deep --strict "$app"
+          codesign -d -r- "$app" 2>&1 | grep 'certificate leaf'
+          sleep 5
+          pgrep -xl hachibongo
+          pkill -x hachibongo || true

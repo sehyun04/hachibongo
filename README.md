@@ -64,7 +64,9 @@
 
 - Windows: 설치 파일을 돌리면 `%LOCALAPPDATA%\hachibongo` 에 깔리고 시작 메뉴·바탕화면에 바로 가기가 생긴다. 관리자 권한은 필요 없다.
   코드 서명을 안 해서 처음엔 'Windows의 PC 보호' 창이 뜬다 — '추가 정보' → '실행'.
-- 맥: dmg 를 열어 앱을 Applications 로 끌어다 놓는다. 애플 공증을 안 받아서 처음 열 때 한 번 막힌다(아래 '맥에서').
+- 맥: 터미널에 `curl -fsSL https://github.com/sehyun04/hachibongo/releases/latest/download/install-mac.sh | sh` 한 줄이면
+  받아서 깔고 켠다(`scripts/install-mac.sh`). dmg 를 끌어다 놓아도 되지만, 애플 공증을 안 받아서 브라우저로 받은 앱은
+  처음 열 때 '열지 않음' 으로 한 번 막힌다(아래 '맥에서'). curl 로 받으면 맥이 격리 표시를 안 붙여 막히지 않는다.
 - 그 뒤로는 앱이 알아서 새 판으로 바꾼다. 켜고 20초 뒤와 6시간마다 맨 마지막 릴리스의 `latest.json` 을 보고, 새 판이면 받아서
   바꿔 끼우고 다시 켠다(Windows 는 설치 진행 창이 1초쯤 떴다 사라진다). 트레이 메뉴 아래쪽 '업데이트 확인 (판)' 으로 바로 물을 수도 있다.
 - CI 가 구운 판(`HACHIBONGO_RELEASE`)만 업데이트한다. 직접 구운 판은 메뉴에 '직접 구운 판' 으로 나오고 그대로 있다 —
@@ -97,7 +99,9 @@ npm run dev            # 디버그 실행
 맥판은 GitHub Actions 의 `release` 가 굽는다(태그를 올리면 저절로, Actions 탭에서 손으로도 — 손으로 돌리면 릴리스는 안 만들고
 그 실행의 Artifacts 에만 남긴다). 인텔·애플 실리콘 둘 다 열린다. 직접 구울 때는 맥에서 `npm install` 뒤 `npx tauri build --bundles app`.
 
-- 애플 공증을 받지 않아서 처음 열 때 막힌다. 응용 프로그램으로 옮긴 뒤 터미널에서 `xattr -dr com.apple.quarantine /Applications/hachibongo.app`.
+- 애플 공증을 받지 않아서 dmg 로 깔면 처음 열 때 막힌다(한 줄 설치는 안 막힌다 — `mac-install` 워크플로가 릴리스마다 실제 맥에서 확인한다).
+  응용 프로그램으로 옮긴 뒤 터미널에서 `xattr -dr com.apple.quarantine /Applications/hachibongo.app`.
+  이 창을 아예 없애려면 애플 개발자 프로그램(연 99달러)의 Developer ID 로 서명하고 공증을 받아야 한다.
   터미널을 안 쓰면 한 번 열어 막힌 다음 시스템 설정 → 개인정보 보호 및 보안 맨 아래의 '그래도 열기'.
   오른쪽 클릭 → 열기는 맥OS 14 까지만 된다.
 - 처음 켜면 **입력 모니터링** 허락을 묻는다(시스템 설정 → 개인정보 보호 및 보안). 허락하면 다시 켜지 않아도 몇 초 안에 키를 받는다.
@@ -127,7 +131,9 @@ npm run dev            # 디버그 실행
 | `src-tauri/src/update.rs` | 자체 업데이트 — 새 판 묻기·받기·바꿔 끼우기, 트레이의 '업데이트 확인' |
 | `relay/` | 같이 하기 중계(Cloudflare Worker + Durable Object)와 그 검증(`test.mjs`) |
 | `.github/workflows/release.yml` | 태그를 올리면 윈도우 설치 파일·맥 dmg 를 굽고 서명해서 릴리스로 낸다. 릴리스 본문은 `.github/release-notes.md` |
+| `.github/workflows/mac-install.yml` | 릴리스 뒤 실제 맥에서 한 줄 설치가 막힘 없이 켜지는지 본다 |
 | `scripts/version.mjs` | 판 번호를 다섯 군데 같이 바꾸고, CI 에서 태그와 맞는지 본다 |
+| `scripts/install-mac.sh` | 맥 한 줄 설치. curl 로 받아 격리 표시 없이 깐다 |
 | `scripts/measure-chars.py` | 치이스페 그림에서 캐릭터 자리를 재서 `src/chars.js` 를 만든다 |
 
 ## 알아 둘 것

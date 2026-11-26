@@ -114,8 +114,9 @@ jobs:
           v="$(node -p "require('./src-tauri/tauri.conf.json').version")"
           app=src-tauri/target/universal-apple-darwin/release/bundle/macos/hachibongo.app
           mkdir out
-          COPYFILE_DISABLE=1 tar -czf "out/hachibongo-${v}-mac-update.tar.gz" -C "$(dirname "$app")" hachibongo.app
-          npx tauri signer sign "out/hachibongo-${v}-mac-update.tar.gz"
+          # 업데이트 묶음은 한 줄 설치(scripts/install-mac.sh)도 받아 가므로 판 번호 없는 늘 같은 이름으로 둔다
+          COPYFILE_DISABLE=1 tar -czf out/hachibongo-mac.app.tar.gz -C "$(dirname "$app")" hachibongo.app
+          npx tauri signer sign out/hachibongo-mac.app.tar.gz
           stage="$RUNNER_TEMP/dmg"
           mkdir "$stage"
           ditto "$app" "$stage/hachibongo.app"
@@ -154,7 +155,7 @@ jobs:
           v="${GITHUB_REF_NAME#v}"
           url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
           win="hachibongo-${v}-windows-setup.exe"
-          mac="hachibongo-${v}-mac-update.tar.gz"
+          mac="hachibongo-mac.app.tar.gz"
           dmg="hachibongo-${v}-mac.dmg"
           jq -n --arg v "$v" --arg wu "$url/$win" --arg ws "$(cat "out/$win.sig")" --arg mu "$url/$mac" --arg ms "$(cat "out/$mac.sig")" \
             '{version: $v, notes: "", pub_date: (now | todate), platforms: {
@@ -163,4 +164,4 @@ jobs:
                "darwin-x86_64": {url: $mu, signature: $ms}}}' > out/latest.json
           sed "s/{{v}}/$v/g" .github/release-notes.md > notes.md
           gh release create "$GITHUB_REF_NAME" --title "hachibongo $v" --notes-file notes.md \
-            "out/$win" "out/$dmg" "out/$mac" out/latest.json
+            "out/$win" "out/$dmg" "out/$mac" out/latest.json scripts/install-mac.sh
